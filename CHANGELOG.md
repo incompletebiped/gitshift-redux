@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Committed work that silently never reached GitHub**: after committing in a freshly-initialized repo (no upstream yet), the Changes tab reported a clean working tree with no hint that commits were still local. It now counts unpushed commits directly and shows a "_N_ commits not on GitHub — Push now / Publish" banner, so local-only commits are no longer mistaken for a fully synced repo.
 - **Remote branches were not clickable**: rows under "Remote Branches" now check out the branch on click (creating a local tracking branch), matching the behavior of local-branch rows.
 - **Phantom `HEAD -> origin/main` branch**: the symbolic remote `HEAD` ref no longer appears as a spurious extra entry in the Branches list.
+- **Git PATH repair hardened** (`ensureGitOnPath`): Honors the editor's `git.path` setting before falling back to common Git-for-Windows install locations. Runs once at activation so all git commands succeed in Cursor/VS Code forks where the extension-host PATH is missing Git.
+- **Credential helper improvements**: Additional guards in `gitCredentials.ts` to prevent edge-case failures when switching accounts on repositories with embedded credentials.
+- **Package ignore list** (`.vscodeignore`): Excludes `.claude/`, `.npmignore`, `gitshift-fixes-replication.md`, and `*.vsix` from the published extension bundle.
+
+---
 
 ## [1.1.0] - 2026-06-03
 
