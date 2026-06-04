@@ -51,8 +51,10 @@ async function storeCredentialsInGitStore(username: string, token: string): Prom
         // Add the new credential
         lines.push(credentialLine.trim());
 
-        // Write back to file
-        fs.writeFileSync(credentialStorePath, lines.join('\n') + '\n', { mode: 0o600 });
+        // Write back to file — always LF line endings so git-credential-store
+        // can parse it correctly on Windows (CRLF breaks host matching).
+        const output = lines.join('\n') + '\n';
+        fs.writeFileSync(credentialStorePath, output.replace(/\r\n/g, '\n').replace(/\r/g, '\n'), { mode: 0o600 });
     } catch (error: any) {
         // If we can't write to the credential store, fall back to URL embedding
         // This is handled by the calling code

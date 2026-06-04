@@ -53,7 +53,26 @@ if (tagExists) {
 }
 
 // 6. Push branch + tags
-run('git push');
-run('git push --tags');
+try {
+  run('git push');
+  run('git push --tags');
+  console.log(`\nDone. GitHub Actions will build the release at:\nhttps://github.com/incompletebiped/gitshift-redux/releases/tag/${tag}\n`);
+} catch (e) {
+  const msg = e.message || '';
+  if (msg.includes('workflow')) {
+    console.error(`
+Push blocked: your stored token is missing the "workflow" scope.
+GitHub requires it to push files under .github/workflows/.
 
-console.log(`\nDone. GitHub Actions will build the release at:\nhttps://github.com/incompletebiped/gitshift-redux/releases/tag/${tag}\n`);
+Fix:
+  1. In GitShift, update the incompletebiped token to a PAT that includes
+     repo, user:email, read:user, workflow scopes.
+  2. Then run:  git push && git push --tags
+
+The commit and tag ${tag} are already created locally.
+`);
+  } else {
+    console.error(`\nPush failed: ${msg}\n`);
+  }
+  process.exit(1);
+}
