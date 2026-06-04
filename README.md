@@ -4,7 +4,7 @@
 [![Editor](https://img.shields.io/badge/optimized%20for-Cursor%20AI-7c3aed.svg)](https://cursor.com/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> **Fork notice.** GitShift Redux is a fork of [**GitShift**](https://github.com/mikeeeyy04/GitShift) by [**mikeeeyy04**](https://github.com/mikeeeyy04), specialized for **[Cursor AI](https://cursor.com/)**. All of the original functionality and credit belong to the upstream project; this fork builds on it with fixes that make the new-repository and publish flow work reliably inside Cursor (and other VS Code forks). See [What's different in this fork](#whats-different-in-this-fork) below.
+> **Fork notice.** GitShift Redux is a fork of <a href="https://github.com/mikeeeyy04/GitShift" target="_blank" rel="noopener noreferrer"><strong>GitShift</strong></a> by <a href="https://github.com/mikeeeyy04" target="_blank" rel="noopener noreferrer"><strong>mikeeeyy04</strong></a>, specialized for <a href="https://cursor.com/" target="_blank" rel="noopener noreferrer"><strong>Cursor AI</strong></a>. All of the original functionality and credit belong to the upstream project; this fork builds on it with fixes that make the new-repository and publish flow work reliably inside Cursor (and other VS Code forks). See [What's different in this fork](#whats-different-in-this-fork) below.
 
 ![GitShift Demo](https://i.imgur.com/cqwPE8H.gif)
 
@@ -402,11 +402,11 @@ The MIT License allows commercial use, modification, and distribution. Please ma
 
 ## Feedback & Issues
 
-Found a bug or have a feature request **for this fork**? Please [open an issue](https://github.com/incompletebiped/gitshift-redux/issues) on the GitShift Redux repo. For issues with the original extension, use the [upstream tracker](https://github.com/mikeeeyy04/GitShift/issues).
+Found a bug or have a feature request **for this fork**? Please <a href="https://github.com/incompletebiped/gitshift-redux/issues" target="_blank" rel="noopener noreferrer">open an issue</a> on the GitShift Redux repo. For issues with the original extension, use the <a href="https://github.com/mikeeeyy04/GitShift/issues" target="_blank" rel="noopener noreferrer">upstream tracker</a>.
 
 ## Credits
 
-GitShift Redux is a fork of [**GitShift**](https://github.com/mikeeeyy04/GitShift), originally created by [**mikeeeyy04**](https://github.com/mikeeeyy04) to solve the common problem of managing multiple GitHub identities. This fork adapts that work for **Cursor AI** and refines the new-repository / publish flow. Full credit for the original extension goes to the upstream author — please visit [the upstream repo](https://github.com/mikeeeyy04/GitShift) to support their work.
+GitShift Redux is a fork of <a href="https://github.com/mikeeeyy04/GitShift" target="_blank" rel="noopener noreferrer"><strong>GitShift</strong></a>, originally created by <a href="https://github.com/mikeeeyy04" target="_blank" rel="noopener noreferrer"><strong>mikeeeyy04</strong></a> to solve the common problem of managing multiple GitHub identities. This fork adapts that work for **Cursor AI** and refines the new-repository / publish flow. Full credit for the original extension goes to the upstream author — please visit <a href="https://github.com/mikeeeyy04/GitShift" target="_blank" rel="noopener noreferrer">the upstream repo</a> to support their work.
 
 ---
 
@@ -414,6 +414,6 @@ GitShift Redux is a fork of [**GitShift**](https://github.com/mikeeeyy04/GitShif
 
 **Enjoy seamless GitHub account switching in Cursor!** 🚀
 
-A community fork of [GitShift](https://github.com/mikeeeyy04/GitShift) by mikeeeyy04
+A community fork of <a href="https://github.com/mikeeeyy04/GitShift" target="_blank" rel="noopener noreferrer">GitShift</a> by <a href="https://github.com/mikeeeyy04" target="_blank" rel="noopener noreferrer">mikeeeyy04</a>
 
 </div>
