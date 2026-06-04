@@ -1,7 +1,11 @@
 .vscode/**
 .vscode-test/**
+.claude/**
 src/**
 .gitignore
+.npmignore
+gitshift-fixes-replication.md
+*.vsix
 .yarnrc
 vsc-extension-quickstart.md
 **/tsconfig.json

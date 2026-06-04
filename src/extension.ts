@@ -7,6 +7,8 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { getCurrentGitUser, setGitUser, isGitRepository, getGitRemoteUrl } from './gitManager';
 import { loadAccounts, createDefaultAccountsFile, accountsFileExists, saveAccounts } from './accountManager';
 import { createStatusBarItem, updateStatusBar } from './statusBar';
@@ -19,6 +21,61 @@ import { GitHubAccount } from './types';
 import { signInToGitHub, getGitHubUser, getGitHubEmails, getGitHubSessions, getGitHubSessionByAccountId, initAuthSecrets, validateGitHubToken, storeGitHubToken, deleteGitHubToken, getGitHubToken, checkRepoAccess, checkCollaboratorAccess, getAllStoredTokens, createGitHubRepository } from './githubAuth';
 import { quickCloneRepository } from './repoQuickClone';
 import { configureGitCredentials, updateRemoteUrlWithToken, getRemoteUrl, parseGitHubUrl, migrateEmbeddedCredentials } from './gitCredentials';
+
+/**
+ * Ensure Git is reachable on the extension host's PATH (fixes #9).
+ *
+ * GitShift runs git via child_process, which relies on the extension host's
+ * process.env.PATH. In Cursor and other VS Code forks on Windows, that PATH
+ * frequently does NOT include Git's directory even when git works fine in the
+ * integrated terminal and on the system PATH — so every git call fails, account
+ * switching silently does nothing, and the panel shows "Not in a Git repository".
+ *
+ * We honor the editor's configured `git.path` first, then prepend the common
+ * Git-for-Windows install locations if they exist and aren't already present.
+ * This runs once at activation, before any git command.
+ */
+function ensureGitOnPath(log: (message: string) => void): void {
+  const sep = path.delimiter;
+  const current = process.env.PATH || '';
+  const currentLower = current.toLowerCase();
+  const candidates: string[] = [];
+
+  // 1) Respect the editor's `git.path` setting (may be a string or string[]).
+  const configured = vscode.workspace.getConfiguration('git').get<string | string[]>('path');
+  const configuredPaths = Array.isArray(configured) ? configured : (configured ? [configured] : []);
+  for (const gp of configuredPaths) {
+    if (gp) {
+      try { candidates.push(path.dirname(gp)); } catch { /* ignore malformed entry */ }
+    }
+  }
+
+  // 2) Common Git-for-Windows install locations (the dirs Cursor's ext host tends to miss).
+  if (process.platform === 'win32') {
+    const roots = [process.env.ProgramFiles, process.env['ProgramFiles(x86)']]
+      .filter((r): r is string => !!r);
+    for (const root of roots) {
+      candidates.push(
+        path.join(root, 'Git', 'cmd'),
+        path.join(root, 'Git', 'bin'),
+        path.join(root, 'Git', 'mingw64', 'bin')
+      );
+    }
+  }
+
+  const toAdd = candidates.filter(dir => {
+    try {
+      return !!dir && fs.existsSync(dir) && !currentLower.includes(dir.toLowerCase());
+    } catch {
+      return false;
+    }
+  });
+
+  if (toAdd.length > 0) {
+    process.env.PATH = toAdd.join(sep) + sep + current;
+    log(`[PATH] Prepended Git dirs to extension-host PATH: ${toAdd.join(', ')}`);
+  }
+}
 
 // Global instances
 let treeProvider: any;
@@ -44,6 +101,11 @@ export async function activate(context: vscode.ExtensionContext) {
     gitshiftOutputChannel.appendLine(`Detected VS Code fork: ${appName}`);
     gitshiftOutputChannel.appendLine('Using enhanced compatibility mode for git operations');
   }
+
+  // Repair the extension-host PATH so git is reachable (fixes #9 — Cursor/VS Code
+  // forks on Windows often launch the ext host without Git on PATH). Must run
+  // before any git command, otherwise repo detection and account switching fail.
+  ensureGitOnPath((message) => gitshiftOutputChannel.appendLine(message));
 
   // Store context globally for secret storage access
   extensionContext = context;

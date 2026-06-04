@@ -5,6 +5,25 @@ All notable changes to the GitShift extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-06-03
+
+First release of **GitShift Redux** — a fork of [GitShift](https://github.com/mikeeeyy04/GitShift) by mikeeeyy04, specialized for **Cursor AI**. Fixes three issues reported upstream that remained open.
+
+### Fixed
+
+- **Cursor credential conflicts ([#6](https://github.com/mikeeeyy04/GitShift/issues/6))**: Set `credential.useHttpPath=true` so the Windows Credential Manager keys credentials per repository path instead of one-per-host. Multiple authenticated github.com accounts no longer overwrite each other when switching.
+- **git not on the extension-host PATH ([#9](https://github.com/mikeeeyy04/GitShift/issues/9))**: On activation, the extension now repairs `process.env.PATH` (honoring the editor's `git.path` setting, then standard Git-for-Windows locations) so git is reachable in Cursor/VS Code forks. Previously account switching failed silently and the panel reported "Not in a Git repository."
+- **Initialize-repository deadlock ([#8](https://github.com/mikeeeyy04/GitShift/issues/8))**: Initialize now runs directly instead of being blocked by the "Not in a Git repository" guard, and selecting an account falls back to the global identity until a repo exists — breaking the chicken-and-egg loop on empty folders.
+
+### Added
+
+- **Publish an already-initialized repo**: a "Publish to GitHub" banner now appears for any repository that has no remote, so initializing locally no longer strands you without a way to push.
+
+### Changed
+
+- New repositories default to the `main` branch (`git init -b main`, with fallbacks for older Git) instead of `master`.
+- Rebranded to `incompletebiped.gitshift-redux` (name, publisher, repository links); README and docs updated for the Cursor-focused fork.
+
 ## [1.0.2] - 2025-11-03
 
 ### Added

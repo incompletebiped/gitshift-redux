@@ -12,12 +12,24 @@ A powerful extension that helps developers seamlessly switch between multiple Gi
 
 ## What's different in this fork
 
-This fork is tuned for **Cursor AI** and fixes several rough edges in the original's brand-new-repository workflow — the path most affected when running inside a VS Code fork like Cursor:
+Redux exists to make GitShift work reliably in **Cursor AI**, where running as a VS Code *fork* on Windows exposes problems the upstream extension hasn't addressed. Each item below is an issue reported upstream that's still open — and fixed here.
 
-- **Initialize Repository now works.** Upstream wrapped `git init` in a guard that aborted with "Not in a Git repository" — which is always true when you're trying to *create* the repo. Initialize now runs directly.
-- **Pick an account before the repo exists.** Selecting an account in an empty folder used to fail silently because it wrote repo-local git config that didn't exist yet. The fork falls back to your **global** identity until a repo is created, then writes repo-local config as before — so you can choose who you are *before* `git init`.
-- **New repos default to `main`.** `git init` uses `init -b main` (with safe fallbacks for older Git) instead of leaving you on `master`.
-- **Publish an already-initialized repo.** The "Publish to GitHub" button used to disappear the moment you initialized a repo, stranding you with a local repo and no remote. A **Publish to GitHub** banner now appears for any repo that has no remote, so you can create the GitHub repo and push in one step.
+### 🔑 Cursor credential conflicts — [#6](https://github.com/mikeeeyy04/GitShift/issues/6) *(the headline fix)*
+
+This is the reason Redux exists. In Cursor on Windows, switching between multiple authenticated GitHub accounts breaks pushes: Cursor's built-in GitHub auth and the Windows Credential Manager store a **single credential per host**, so each account silently overwrites the last and you end up pushing as the wrong identity (or failing auth entirely). Redux sets `credential.useHttpPath=true` so Git resolves a credential **per repository path** instead of one-per-host — letting multiple github.com accounts coexist instead of clobbering each other.
+
+### git not on the extension-host PATH — [#9](https://github.com/mikeeeyy04/GitShift/issues/9)
+
+In Cursor and other VS Code forks the extension host often starts **without Git on its `PATH`**, even though git works fine in the integrated terminal. Every git call then fails silently — account switching does nothing, no account ever shows as Active, and the panel insists you're "not in a Git repository." Redux repairs the extension-host PATH at startup (honoring your `git.path` setting first, then the standard Git-for-Windows locations) so git is always reachable.
+
+### Initialize-repository deadlock — [#8](https://github.com/mikeeeyy04/GitShift/issues/8)
+
+On a brand-new empty folder you couldn't get started: the extension wouldn't initialize a repo without a configured identity, but wouldn't let you set an identity until a repo existed. Redux breaks the loop — **Initialize** runs directly, and selecting an account falls back to your **global** identity until the repo exists (then writes repo-local config as before).
+
+### Plus a couple of quality-of-life fixes
+
+- **New repos default to `main`** — `git init -b main` (with safe fallbacks for older Git) instead of leaving you on `master`.
+- **Publish an already-initialized repo** — a **Publish to GitHub** banner now appears for any repo that has no remote, so initializing locally no longer strands you with no way to push.
 
 > **Tip:** *Publish to GitHub* is the all-in-one path (init + create-on-GitHub + commit + push) for a new project — use it instead of *Initialize Repository*, which is local-only.
 
@@ -388,32 +400,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 The MIT License allows commercial use, modification, and distribution. Please maintain proper attribution when using this code. See [LICENSE](LICENSE) for full details.
 
-## Support the Project
-
-If you find **GitShift** helpful and want to support its development, consider buying me a coffee!
-
-<a href="https://www.buymeacoffee.com/mikeeeyy" target="_blank">
-  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50" />
-</a>
-
-Your support helps keep this project maintained and improved! 💖
-
 ## Feedback & Issues
 
 Found a bug or have a feature request **for this fork**? Please [open an issue](https://github.com/incompletebiped/gitshift-redux/issues) on the GitShift Redux repo. For issues with the original extension, use the [upstream tracker](https://github.com/mikeeeyy04/GitShift/issues).
 
 ## Credits
 
-GitShift Redux is a fork of [**GitShift**](https://github.com/mikeeeyy04/GitShift), originally created by [**mikeeeyy04**](https://github.com/mikeeeyy04) to solve the common problem of managing multiple GitHub identities. This fork adapts that work for **Cursor AI** and refines the new-repository / publish flow. Full credit for the original extension goes to the upstream author; if you find GitShift useful, consider supporting them below.
+GitShift Redux is a fork of [**GitShift**](https://github.com/mikeeeyy04/GitShift), originally created by [**mikeeeyy04**](https://github.com/mikeeeyy04) to solve the common problem of managing multiple GitHub identities. This fork adapts that work for **Cursor AI** and refines the new-repository / publish flow. Full credit for the original extension goes to the upstream author — please visit [the upstream repo](https://github.com/mikeeeyy04/GitShift) to support their work.
 
 ---
 
 <div align="center">
 
-**Enjoy seamless GitHub account switching!** 🚀
+**Enjoy seamless GitHub account switching in Cursor!** 🚀
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support%20GitShift-yellow.svg?style=for-the-badge&logo=buy-me-a-coffee)](https://www.buymeacoffee.com/mikeeeyy)
-
-Made with ❤️ for the developer community
+A community fork of [GitShift](https://github.com/mikeeeyy04/GitShift) by mikeeeyy04
 
 </div>

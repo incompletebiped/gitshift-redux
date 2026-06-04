@@ -72,6 +72,21 @@ export async function configureGitCredentials(username: string, token: string): 
         // Store credentials in Git's credential store (works globally)
         await storeCredentialsInGitStore(username, token);
 
+        // Key credentials by the full HTTP path, not just the host (fixes #6).
+        // On Windows, Cursor's built-in GitHub auth + Windows Credential Manager
+        // store a single credential per host, so switching between multiple
+        // github.com accounts makes them overwrite each other and pushes fail.
+        // `credential.useHttpPath true` makes Git resolve a credential per
+        // owner/repo path, so each account/repo keeps its own. Reversible global
+        // config; idempotent to set repeatedly.
+        try {
+            await execPromise('git config --global credential.useHttpPath true', {
+                env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+            });
+        } catch (httpPathError: any) {
+            console.warn(`Failed to set credential.useHttpPath: ${httpPathError.message}`);
+        }
+
         // Only configure local credential helper if we have a workspace
         if (workspaceRoot) {
             try {
