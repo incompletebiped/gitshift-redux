@@ -145,9 +145,25 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
             break;
         }
       } catch (error: any) {
-        // Show modal dialog for push errors
         const isPushError = data.type === 'push' || data.type === 'commitAndPush';
-        if (isPushError) {
+        const isNonFastForward = error.message?.includes('non-fast-forward') || error.message?.includes('[rejected]');
+        if (isPushError && isNonFastForward) {
+          const choice = await vscode.window.showErrorMessage(
+            `Push rejected: remote has commits your branch doesn't have. Pull first to integrate remote changes, then push.`,
+            { modal: true },
+            'Pull and Retry'
+          );
+          if (choice === 'Pull and Retry') {
+            try {
+              await pull();
+              await push();
+              vscode.window.showInformationMessage('Pulled and pushed successfully');
+              await this.refresh();
+            } catch (retryError: any) {
+              vscode.window.showErrorMessage(`GitShift: ${retryError.message}`, { modal: true });
+            }
+          }
+        } else if (isPushError) {
           vscode.window.showErrorMessage(`GitShift: ${error.message}`, { modal: true });
         } else {
           vscode.window.showErrorMessage(`GitShift: ${error.message}`);
