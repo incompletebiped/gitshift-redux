@@ -52,7 +52,10 @@ async function executeGitCommand(command: string): Promise<string> {
     try {
         const { stdout } = await execAsync(`git ${command}`, {
             cwd,
-            env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+            // GIT_TERMINAL_PROMPT=0 prevents interactive prompts.
+            // GIT_ASKPASS='' prevents Cursor's built-in OAuth askpass from
+            // intercepting credential lookups and overriding the stored PAT.
+            env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' }
         });
         return stdout.trim();
     } catch (error: any) {
