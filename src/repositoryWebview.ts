@@ -106,10 +106,6 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
           case 'push':
             await this._handlePush();
             break;
-          case 'publishToGitHub':
-            await vscode.commands.executeCommand('gitshift.publishToGitHub');
-            await this.refresh();
-            break;
           case 'pull':
             await this._handlePull();
             break;
@@ -145,25 +141,9 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
             break;
         }
       } catch (error: any) {
+        // Show modal dialog for push errors
         const isPushError = data.type === 'push' || data.type === 'commitAndPush';
-        const isNonFastForward = error.message?.includes('non-fast-forward') || error.message?.includes('[rejected]');
-        if (isPushError && isNonFastForward) {
-          const choice = await vscode.window.showErrorMessage(
-            `Push rejected: remote has commits your branch doesn't have. Pull first to integrate remote changes, then push.`,
-            { modal: true },
-            'Pull and Retry'
-          );
-          if (choice === 'Pull and Retry') {
-            try {
-              await pull();
-              await push();
-              vscode.window.showInformationMessage('Pulled and pushed successfully');
-              await this.refresh();
-            } catch (retryError: any) {
-              vscode.window.showErrorMessage(`GitShift: ${retryError.message}`, { modal: true });
-            }
-          }
-        } else if (isPushError) {
+        if (isPushError) {
           vscode.window.showErrorMessage(`GitShift: ${error.message}`, { modal: true });
         } else {
           vscode.window.showErrorMessage(`GitShift: ${error.message}`);
@@ -682,19 +662,6 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
         </button>
       </div>
 
-      <!-- Unpushed-commits warning: git reports no "ahead" count without an
-           upstream, so freshly-init'd repos would otherwise look fully synced
-           after committing. Surface unpushed commits explicitly. -->
-      ${status.unpushed > 0 ? `
-        <div class="unpushed-banner">
-          <i class="codicon codicon-cloud-upload"></i>
-          <span class="unpushed-text">${status.unpushed} commit${status.unpushed !== 1 ? 's' : ''} not on GitHub${status.hasRemote ? '' : ' (no remote yet)'}</span>
-          <button class="unpushed-push-btn" onclick="${status.hasRemote ? 'pushWithLoading()' : 'publishToGitHub()'}" title="${status.hasRemote ? 'Push now' : 'Publish to GitHub'}">
-            ${status.hasRemote ? 'Push now' : 'Publish'}
-          </button>
-        </div>
-      ` : ''}
-
       <!-- Commit Section -->
       ${status.staged.length > 0 ? `
         <div class="commit-box">
@@ -730,13 +697,8 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
           <div class="empty-state-icon">
             <i class="codicon codicon-check-all"></i>
           </div>
-          ${status.unpushed > 0 ? `
-            <h3>Committed locally</h3>
-            <p>Push to send ${status.unpushed} commit${status.unpushed !== 1 ? 's' : ''} to GitHub</p>
-          ` : `
-            <h3>No Changes</h3>
-            <p>Your working tree is clean</p>
-          `}
+          <h3>No Changes</h3>
+          <p>Your working tree is clean</p>
         </div>
       ` : ''}
 
@@ -836,7 +798,7 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
         <div class="section">
           <div class="section-header">REMOTE BRANCHES (${remoteBranches.length})</div>
           ${remoteBranches.map(branch => `
-            <div class="list-item" id="remote-branch-${branch.name.replace(/[^a-zA-Z0-9]/g, '-')}" onclick="switchToRemoteBranchWithLoading('${branch.name}')" title="Check out this remote branch">
+            <div class="list-item">
               <i class="codicon codicon-cloud branch-icon"></i>
               <span class="branch-name">${branch.name}</span>
             </div>
@@ -1138,43 +1100,6 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       display: flex;
       gap: 6px;
       margin-bottom: 12px;
-    }
-
-    .unpushed-banner {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
-      margin-bottom: 12px;
-      border-radius: 4px;
-      background: var(--vscode-inputValidation-warningBackground, rgba(255, 200, 0, 0.1));
-      border: 1px solid var(--vscode-inputValidation-warningBorder, rgba(255, 200, 0, 0.4));
-      color: var(--vscode-foreground);
-      font-size: 11px;
-    }
-
-    .unpushed-banner .codicon {
-      flex-shrink: 0;
-    }
-
-    .unpushed-text {
-      flex: 1;
-    }
-
-    .unpushed-push-btn {
-      flex-shrink: 0;
-      background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border: none;
-      border-radius: 3px;
-      padding: 4px 10px;
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .unpushed-push-btn:hover {
-      background: var(--vscode-button-hoverBackground);
     }
 
     .action-btn {
@@ -2387,10 +2312,6 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       push();
     }
 
-    function publishToGitHub() {
-      vscode.postMessage({ type: 'publishToGitHub' });
-    }
-
     function pull() {
       vscode.postMessage({ type: 'pull' });
     }
@@ -2443,14 +2364,6 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
 
     function switchToBranchWithLoading(name) {
       const branchId = 'branch-' + name.replace(/[^a-zA-Z0-9]/g, '-');
-      setLoading(branchId, true);
-      switchToBranch(name);
-    }
-
-    function switchToRemoteBranchWithLoading(name) {
-      // Sets loading on the remote-specific id, then checks out by name. git DWIM
-      // creates a local tracking branch when checking out a bare remote name.
-      const branchId = 'remote-branch-' + name.replace(/[^a-zA-Z0-9]/g, '-');
       setLoading(branchId, true);
       switchToBranch(name);
     }

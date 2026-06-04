@@ -72,9 +72,9 @@ export class SupportProvider implements vscode.WebviewViewProvider {
     }
 
     .donation-section h4 {
-      font-size: clamp(11px, 2.8vw, 13px);
-      font-weight: 600;
-      margin-bottom: clamp(4px, 1vw, 8px);
+      font-size: clamp(11px, 2.8vw, 12px);
+      font-weight: 500;
+      margin-bottom: clamp(4px, 1vw, 6px);
       color: var(--vscode-foreground);
       letter-spacing: 0.3px;
     }
@@ -82,44 +82,13 @@ export class SupportProvider implements vscode.WebviewViewProvider {
     .donation-section p {
       font-size: clamp(9px, 2.3vw, 10px);
       color: var(--vscode-descriptionForeground);
-      margin-bottom: clamp(12px, 3vw, 16px);
+      margin-bottom: clamp(10px, 2.5vw, 12px);
       line-height: 1.4;
-    }
-
-    .donation-grid {
-      display: flex;
-      gap: clamp(8px, 2vw, 12px);
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .donor-card {
-      flex: 1;
-      min-width: 80px;
-      max-width: 140px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .donor-label {
-      font-size: clamp(8px, 2vw, 9px);
-      color: var(--vscode-descriptionForeground);
-      text-align: center;
-      line-height: 1.3;
-    }
-
-    .donor-name {
-      font-size: clamp(9px, 2.2vw, 10px);
-      font-weight: 600;
-      color: var(--vscode-foreground);
     }
 
     .donation-link {
       display: inline-block;
       transition: transform 0.2s ease, opacity 0.2s ease;
-      width: 100%;
     }
 
     .donation-link:hover {
@@ -128,68 +97,69 @@ export class SupportProvider implements vscode.WebviewViewProvider {
     }
 
     .donation-link img {
-      height: clamp(28px, 7vw, 36px);
+      height: clamp(32px, 8vw, 40px);
       border-radius: 4px;
-      width: 100%;
-      object-fit: contain;
     }
 
-    .divider {
-      width: 1px;
-      background: rgba(255, 255, 255, 0.08);
-      align-self: stretch;
-      margin: 4px 0;
-    }
-
-    @media (max-width: 180px) {
-      .donation-grid {
-        flex-direction: column;
-        align-items: center;
+    @media (max-width: 220px) {
+      .donation-section {
+        padding: 10px;
       }
-      .divider { display: none; }
-      .donor-card { max-width: 100%; width: 100%; }
+      
+      .donation-link img {
+        height: 28px;
+      }
     }
 
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: transparent; }
+    /* Custom Minimalist Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
     ::-webkit-scrollbar-thumb {
       background: var(--vscode-scrollbarSlider-background);
       border-radius: 4px;
+      transition: background 0.2s ease;
     }
-    ::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground); }
-    ::-webkit-scrollbar-thumb:active { background: var(--vscode-scrollbarSlider-activeBackground); }
-    * { scrollbar-width: thin; scrollbar-color: var(--vscode-scrollbarSlider-background) transparent; }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--vscode-scrollbarSlider-hoverBackground);
+    }
+
+    ::-webkit-scrollbar-thumb:active {
+      background: var(--vscode-scrollbarSlider-activeBackground);
+    }
+
+    /* Firefox */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
+    }
   </style>
 </head>
 <body>
   <div class="donation-section">
-    <h4>Support GitShift x GitShift Redux</h4>
-    <p>If this extension is useful, consider supporting the devs behind it!</p>
-    <div class="donation-grid">
-      <div class="donor-card">
-        <div class="donor-name">mikeeeyy04</div>
-        <div class="donor-label">Original GitShift</div>
-        <a href="https://www.buymeacoffee.com/mikeeeyy" class="donation-link" onclick="openDonation(event, 'https://www.buymeacoffee.com/mikeeeyy')">
-          <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy mikeeeyy04 a coffee" />
-        </a>
-      </div>
-      <div class="divider"></div>
-      <div class="donor-card">
-        <div class="donor-name">incompletebiped</div>
-        <div class="donor-label">GitShift Redux</div>
-        <a href="https://www.buymeacoffee.com/incompletebiped" class="donation-link" onclick="openDonation(event, 'https://www.buymeacoffee.com/incompletebiped')">
-          <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy incompletebiped a coffee" />
-        </a>
-      </div>
-    </div>
+    <h4>Support GitShift</h4>
+    <p>If you find this extension helpful, consider supporting its development!</p>
+    <a href="https://www.buymeacoffee.com/mikeeeyy" target="_blank" class="donation-link" onclick="openDonation(event)">
+      <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" />
+    </a>
   </div>
 
   <script>
     const vscode = acquireVsCodeApi();
 
-    function openDonation(event, url) {
+    function openDonation(event) {
       event.preventDefault();
-      vscode.postMessage({ type: 'openExternal', url });
+      vscode.postMessage({ 
+        type: 'openExternal', 
+        url: 'https://www.buymeacoffee.com/mikeeeyy' 
+      });
     }
   </script>
 </body>
