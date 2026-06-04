@@ -5,6 +5,14 @@ All notable changes to the GitShift extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-06-04
+
+### Fixed
+
+- **Committed work that silently never reached GitHub**: after committing in a freshly-initialized repo (no upstream yet), the Changes tab reported a clean working tree with no hint that commits were still local. It now counts unpushed commits directly and shows a "_N_ commits not on GitHub — Push now / Publish" banner, so local-only commits are no longer mistaken for a fully synced repo.
+- **Remote branches were not clickable**: rows under "Remote Branches" now check out the branch on click (creating a local tracking branch), matching the behavior of local-branch rows.
+- **Phantom `HEAD -> origin/main` branch**: the symbolic remote `HEAD` ref no longer appears as a spurious extra entry in the Branches list.
+
 ## [1.1.0] - 2026-06-03
 
 First release of **GitShift Redux** — a fork of [GitShift](https://github.com/mikeeeyy04/GitShift) by mikeeeyy04, specialized for **Cursor AI**. Fixes three issues reported upstream that remained open.
