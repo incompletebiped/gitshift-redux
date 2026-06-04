@@ -2033,8 +2033,7 @@ async function checkGitHubAuthMismatch(): Promise<void> {
   try {
     // Get GitHub session
     const session = await vscode.authentication.getSession('github', ['user:email', 'read:user'], {
-      createIfNone: false,
-      silent: true
+      createIfNone: false
     });
 
     if (!session) {

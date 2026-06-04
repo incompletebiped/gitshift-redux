@@ -25,17 +25,6 @@ export interface GitStatus {
     staged: string[];
     unstaged: string[];
     untracked: string[];
-    /** Whether the current branch has a configured upstream. */
-    hasUpstream: boolean;
-    /** Whether the repo has any remote configured. */
-    hasRemote: boolean;
-    /**
-     * Commits that exist locally but on no remote. Counts unpushed commits even
-     * when the branch has NO upstream (unlike `ahead`, which git only reports
-     * when an upstream is set), so a freshly-init'd repo no longer looks "clean"
-     * after committing.
-     */
-    unpushed: number;
 }
 
 /**
@@ -52,10 +41,7 @@ async function executeGitCommand(command: string): Promise<string> {
     try {
         const { stdout } = await execAsync(`git ${command}`, {
             cwd,
-            // GIT_TERMINAL_PROMPT=0 prevents interactive prompts.
-            // GIT_ASKPASS='' prevents Cursor's built-in OAuth askpass from
-            // intercepting credential lookups and overriding the stored PAT.
-            env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' }
+            env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
         });
         return stdout.trim();
     } catch (error: any) {
@@ -78,11 +64,7 @@ export async function getBranches(): Promise<Branch[]> {
 
             if (branchName.includes('remotes/origin/')) {
                 const remoteName = branchName.replace('remotes/origin/', '');
-                // Skip the symbolic HEAD ref. `git branch -a` prints it as
-                // "remotes/origin/HEAD -> origin/main", so after stripping the
-                // prefix we must also reject anything containing the arrow,
-                // not just a bare "HEAD" (otherwise it shows as a phantom branch).
-                if (remoteName !== 'HEAD' && !remoteName.includes('->')) {
+                if (remoteName !== 'HEAD') {
                     branches.push({
                         name: remoteName,
                         current: false,
@@ -187,34 +169,6 @@ export async function getGitStatus(): Promise<GitStatus> {
         if (aheadMatch) ahead = parseInt(aheadMatch[1]);
         if (behindMatch) behind = parseInt(behindMatch[1]);
 
-        // git only reports an "ahead" count when the branch has a configured
-        // upstream. A freshly-init'd local repo has no upstream, so commits made
-        // before the first push would otherwise look like "nothing to push".
-        // Detect upstream/remote presence and count commits not on any remote.
-        let hasUpstream = false;
-        let hasRemote = false;
-        let unpushed = 0;
-        try {
-            await executeGitCommand('rev-parse --abbrev-ref --symbolic-full-name @{u}');
-            hasUpstream = true;
-        } catch {
-            hasUpstream = false;
-        }
-        try {
-            const remotes = await executeGitCommand('remote');
-            hasRemote = remotes.trim().length > 0;
-        } catch {
-            hasRemote = false;
-        }
-        try {
-            // Commits reachable from HEAD but not from any remote ref. Works even
-            // with no upstream set; yields 0 (or throws) on an unborn HEAD.
-            const out = await executeGitCommand('rev-list --count HEAD --not --remotes');
-            unpushed = parseInt(out.trim()) || 0;
-        } catch {
-            unpushed = 0;
-        }
-
         const staged: string[] = [];
         const unstaged: string[] = [];
         const untracked: string[] = [];
@@ -237,7 +191,7 @@ export async function getGitStatus(): Promise<GitStatus> {
             }
         }
 
-        return { branch, ahead, behind, staged, unstaged, untracked, hasUpstream, hasRemote, unpushed };
+        return { branch, ahead, behind, staged, unstaged, untracked };
     } catch (error) {
         return {
             branch: 'unknown',
@@ -245,10 +199,7 @@ export async function getGitStatus(): Promise<GitStatus> {
             behind: 0,
             staged: [],
             unstaged: [],
-            untracked: [],
-            hasUpstream: false,
-            hasRemote: false,
-            unpushed: 0
+            untracked: []
         };
     }
 }
