@@ -1,8 +1,8 @@
 # GitShift Redux
 
-[![VS Code Version](https://img.shields.io/badge/VS%20Code-1.90.0+-blue.svg)](https://code.visualstudio.com/)
-[![Editor](https://img.shields.io/badge/optimized%20for-Cursor%20AI-7c3aed.svg)](https://cursor.com/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+<a href="https://code.visualstudio.com/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/VS%20Code-1.90.0+-blue.svg" alt="VS Code Version" /></a>
+<a href="https://cursor.com/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/optimized%20for-Cursor%20AI-7c3aed.svg" alt="Editor" /></a>
+<a href="LICENSE" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License" /></a>
 
 > **Fork notice.** GitShift Redux is a fork of <a href="https://github.com/mikeeeyy04/GitShift" target="_blank" rel="noopener noreferrer"><strong>GitShift</strong></a> by <a href="https://github.com/mikeeeyy04" target="_blank" rel="noopener noreferrer"><strong>mikeeeyy04</strong></a>, specialized for <a href="https://cursor.com/" target="_blank" rel="noopener noreferrer"><strong>Cursor AI</strong></a>. All of the original functionality and credit belong to the upstream project; this fork builds on it with fixes that make the new-repository and publish flow work reliably inside Cursor (and other VS Code forks). See [What's different in this fork](#whats-different-in-this-fork) below.
 
@@ -376,7 +376,7 @@ git init
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-We have a comprehensive [Contributing Guide](CONTRIBUTING.md) that covers:
+We have a comprehensive <a href="CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing Guide</a> that covers:
 
 - How to set up your development environment
 - Coding standards and best practices
@@ -392,13 +392,13 @@ We have a comprehensive [Contributing Guide](CONTRIBUTING.md) that covers:
 5. Push to the branch (`git push origin feature/AmazingFeature`)
 6. Open a Pull Request
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for complete details.
+Please read <a href="CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a> for complete details.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the <a href="LICENSE" target="_blank" rel="noopener noreferrer">LICENSE</a> file for details.
 
-The MIT License allows commercial use, modification, and distribution. Please maintain proper attribution when using this code. See [LICENSE](LICENSE) for full details.
+The MIT License allows commercial use, modification, and distribution. Please maintain proper attribution when using this code. See <a href="LICENSE" target="_blank" rel="noopener noreferrer">LICENSE</a> for full details.
 
 ## Feedback & Issues
 
