@@ -4,6 +4,9 @@ out
 .vscode-test
 .DS_Store
 
+# Original GitShift Manager (reference copy, not part of this repo)
+GitShift-main/
+
 # GitHub accounts configuration (contains sensitive data)
 **/github-accounts.json
 
