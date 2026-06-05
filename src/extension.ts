@@ -147,11 +147,6 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Auto-activate first account on activation if no repo
-  setTimeout(async () => {
-    await autoActivateFirstAccountIfNeeded();
-  }, 2000); // Give extension time to initialize
-
   // Register contributions webview
   contributionsProvider = new ContributionsProvider(context.extensionUri);
   context.subscriptions.push(
@@ -1309,13 +1304,19 @@ export async function activate(context: vscode.ExtensionContext) {
         await stageAll();
       }
 
+      let didCommit = false;
       if (status.staged.length > 0 || status.unstaged.length > 0 || status.untracked.length > 0) {
         // Make initial commit
         const { commit } = await import('./gitOperations');
         await commit('Initial commit');
+        didCommit = true;
       }
 
-      // Push to GitHub
+      // Only push if there is something to push
+      if (!didCommit) {
+        vscode.window.showWarningMessage('No files to commit — repository published on GitHub but nothing was pushed.');
+        return;
+      }
       const { push } = await import('./gitOperations');
       await push();
 
@@ -1490,41 +1491,20 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Optional: Check GitHub authentication and warn about mismatches (non-blocking)
-  checkGitHubAuthMismatch().catch(() => {
-    // Silent failure - will check again on next repository operation
-  });
-
-  // Auto-import existing GitHub sessions on first launch
-  autoImportGitHubAccounts().then(() => {
-    // After auto-import, validate all account authentication states
-    validateAccountAuthenticationStates().catch((error) => {
+  // Import accounts, validate tokens, then activate — exactly once at startup.
+  // All three steps are sequenced so they don't race each other.
+  autoImportGitHubAccounts().then(async () => {
+    await validateAccountAuthenticationStates().catch((error) => {
       console.error('[GitShift] Failed to validate account states:', error);
     });
-
-    // Auto-activate first account if none is active
-    // Check if we're in a repo to decide which function to use
-    isGitRepository().then(isGitRepo => {
-      if (isGitRepo) {
-        autoActivateFirstAccount().catch((error) => {
-          console.error('[GitShift] Auto-activation after import failed:', error);
-        });
-      } else {
-        autoActivateFirstAccountIfNeeded().catch((error) => {
-          console.error('[GitShift] Auto-activation after import failed:', error);
-        });
-      }
-    }).catch(() => {
-      // If check fails, try the no-repo version
-      autoActivateFirstAccountIfNeeded().catch((error) => {
-        console.error('[GitShift] Auto-activation after import failed:', error);
-      });
+    await runStartupActivation().catch((error) => {
+      console.error('[GitShift] Startup activation failed:', error);
     });
   }).catch((error) => {
     console.error('[GitShift] Auto-import failed:', error);
   });
 
-  // Migrate any existing embedded credentials to secure storage (one-time migration)
+  // Migrate any existing embedded credentials to secure storage (one-time, deferred)
   setTimeout(async () => {
     try {
       const isGitRepo = await isGitRepository();
@@ -1532,42 +1512,30 @@ export async function activate(context: vscode.ExtensionContext) {
         await migrateEmbeddedCredentials();
       }
     } catch (error) {
-      // Silent failure - migration is optional
       console.warn('[GitShift] Credential migration failed:', error);
     }
-  }, 3000); // Run after other initialization
+  }, 3000);
+}
 
-  // Also check periodically if accounts exist but no user is active
-  // This handles cases where accounts were loaded but git config wasn't set
-  // Also handles when workspace is already open on IDE load
-  setTimeout(async () => {
-    try {
-      const isGitRepo = await isGitRepository();
-      if (isGitRepo) {
-        await autoActivateFirstAccount();
-      } else {
-        await autoActivateFirstAccountIfNeeded();
-      }
-    } catch (error) {
-      console.error('[GitShift] Auto-activation after 2 second delay failed:', error);
+// Guard flag — prevents concurrent startup activations from racing each other
+let _startupActivationRunning = false;
+
+/**
+ * Single startup auto-activation entry point.
+ * Guarded so multiple callers (e.g. from import + workspace-change) don't race.
+ */
+async function runStartupActivation(): Promise<void> {
+  if (_startupActivationRunning) return;
+  _startupActivationRunning = true;
+  try {
+    const isGitRepo = await isGitRepository();
+    if (isGitRepo) {
+      await autoActivateFirstAccount();
+    } else {
+      await autoActivateFirstAccountIfNeeded();
     }
-  }, 2000); // Wait 2 seconds after initial load
-
-  // Check immediately if workspace is already open when extension activates
-  if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-    setTimeout(async () => {
-      try {
-        const isGitRepo = await isGitRepository();
-        if (isGitRepo) {
-          await autoActivateFirstAccount();
-        } else {
-          // Not a git repository - auto-activate first account if needed
-          await autoActivateFirstAccountIfNeeded();
-        }
-      } catch (error) {
-        console.error('[GitShift] Auto-activation for existing workspace failed:', error);
-      }
-    }, 3000); // Wait 3 seconds to ensure everything is initialized
+  } finally {
+    _startupActivationRunning = false;
   }
 }
 
@@ -2033,7 +2001,8 @@ async function checkGitHubAuthMismatch(): Promise<void> {
   try {
     // Get GitHub session
     const session = await vscode.authentication.getSession('github', ['user:email', 'read:user'], {
-      createIfNone: false
+      createIfNone: false,
+      silent: true
     });
 
     if (!session) {
@@ -2120,19 +2089,11 @@ async function handleSignInWithGitHub(): Promise<void> {
       return;
     }
 
-    // Check if the session has all required scopes, especially notifications
-    const hasNotificationsScope = session.scopes && session.scopes.includes('notifications');
-    let workingSession = session;
-
-    if (!hasNotificationsScope) {
-      // Force a new session to get the required scopes
-      const newSession = await signInToGitHub(true);
-      if (!newSession || !newSession.scopes || !newSession.scopes.includes('notifications')) {
-        vscode.window.showWarningMessage('This account needs to grant notification permissions. Please sign in again.');
-        return;
-      }
-      workingSession = newSession;
-    }
+    // Use the session as-is regardless of scope list — notifications is optional,
+    // not required for any primary git operation, and forcing a second popup
+    // to get it would break sign-in entirely when Cursor's auth provider doesn't
+    // return it.
+    const workingSession = session;
 
     // Fetch user information for whichever account they signed in with
     const user = await getGitHubUser(workingSession.accessToken);
