@@ -1,8 +1,12 @@
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
+import { promisify } from 'util';
 import { loadAccounts } from './accountManager';
 import { getCurrentGitUser } from './gitManager';
 import { getGitHubUser, getAllStoredTokens } from './githubAuth';
+import { configureGitCredentials } from './gitCredentials';
+
+const execPromise = promisify(exec);
 
 interface GitHubRepo {
   id: number;
@@ -282,6 +286,26 @@ export async function quickCloneRepository(context: vscode.ExtensionContext): Pr
       });
 
       cloneMessage.dispose();
+
+      // SECURITY: `git clone` persists whatever URL it was given as `origin`, so
+      // the tokenized clone URL would leave the PAT sitting in the cloned repo's
+      // .git/config — visible to anything that reads the project. Immediately
+      // rewrite origin to the clean, token-free URL and move auth into the Git
+      // credential store (same model as the account-switch flow). The PAT is
+      // never persisted inside the project.
+      const clonedRepoFsPath = `${cloneDir}/${repoName}`;
+      try {
+        await execPromise(`git remote set-url origin "${httpsUrl}"`, {
+          cwd: clonedRepoFsPath,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+        });
+        await configureGitCredentials(auth.username, auth.token, clonedRepoFsPath);
+      } catch (scrubError: any) {
+        // Don't fail the clone over cleanup, but make the failure loud — a
+        // surviving token in .git/config is exactly the bug we're preventing.
+        const sanitized = scrubError.message?.replace(/https:\/\/[^@]+@github\.com/g, 'https://github.com') || 'unknown error';
+        vscode.window.showWarningMessage(`GitShift: cloned, but failed to remove the token from .git/config — ${sanitized}`);
+      }
 
       // Show popup dialog with options
       const clonedPath = vscode.Uri.file(`${cloneDir}/${repoName}`);
