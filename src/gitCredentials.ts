@@ -90,8 +90,23 @@ export async function configureGitCredentials(username: string, token: string): 
         // Only configure local credential helper if we have a workspace
         if (workspaceRoot) {
             try {
-                // Configure git credential helper to store credentials
-                await execPromise('git config --local credential.helper store', {
+                // Reset inherited credential helpers then add store.
+                // Git applies helpers in order: system → global → local, so Cursor's
+                // global OAuth helper fires before ours without this reset, triggering
+                // the GitHub sign-in dialog even when a PAT is already configured.
+                await execPromise('git config --local credential.helper ""', {
+                    cwd: workspaceRoot,
+                    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+                });
+                await execPromise('git config --local --add credential.helper store', {
+                    cwd: workspaceRoot,
+                    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+                });
+                // The global useHttpPath=true (set for Cursor's credential manager)
+                // makes git include the repo path in the credential lookup key, but
+                // git-credential-store matches on host only — override locally so the
+                // store helper can find the stored PAT.
+                await execPromise('git config --local credential.useHttpPath false', {
                     cwd: workspaceRoot,
                     env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
                 });

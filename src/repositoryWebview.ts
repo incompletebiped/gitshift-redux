@@ -263,9 +263,16 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
     }
     await commit(message);
     vscode.window.showInformationMessage('Changes committed');
-    await push();
-    vscode.window.showInformationMessage('Pushed to remote');
+    // Refresh immediately after commit so the UI reflects the committed
+    // (but not-yet-pushed) state even if push subsequently fails.
     await this.refresh();
+    try {
+      await push();
+      vscode.window.showInformationMessage('Pushed to remote');
+      await this.refresh();
+    } catch (pushError: any) {
+      vscode.window.showErrorMessage(`GitShift: Push failed — ${pushError.message}`, { modal: true });
+    }
     if (this._view) {
       this._view.webview.postMessage({ type: 'clearLoading', buttonId: 'commitPushBtn' });
     }
