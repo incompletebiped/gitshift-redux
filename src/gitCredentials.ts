@@ -65,8 +65,11 @@ async function storeCredentialsInGitStore(username: string, token: string): Prom
  * Configures git to use a credential helper with the provided token
  * Also stores credentials in Git's credential store
  */
-export async function configureGitCredentials(username: string, token: string): Promise<void> {
-    const workspaceRoot = getWorkspaceRoot();
+export async function configureGitCredentials(username: string, token: string, targetDir?: string): Promise<void> {
+    // targetDir lets callers (e.g. a freshly cloned repo not yet open in the
+    // workspace) configure credentials for a specific repo directory. Defaults
+    // to the open workspace root for the normal account-switch flow.
+    const workspaceRoot = targetDir || getWorkspaceRoot();
 
     try {
         // Store credentials in Git's credential store (works globally)
@@ -296,25 +299,37 @@ export async function migrateEmbeddedCredentials(): Promise<void> {
             return;
         }
 
-        // Check if URL has embedded credentials (format: https://username:token@github.com/owner/repo.git)
+        // Check if URL has ANY embedded credentials before @github.com. This must
+        // catch two shapes:
+        //   1. https://username:token@github.com/owner/repo.git  (switch/publish flow)
+        //   2. https://token@github.com/owner/repo.git           (quick-clone flow — no colon)
+        // The old regex required a `user:token` colon pair and silently skipped
+        // shape #2, leaving the PAT sitting in the cloned repo's .git/config.
         if (remoteUrl.includes('@github.com/') && remoteUrl.startsWith('https://')) {
-            // Extract credentials from URL
-            const match = remoteUrl.match(/https:\/\/([^:]+):([^@]+)@github\.com\/(.+)/);
+            // Capture everything between https:// and @github.com/ as the credential
+            // part, and the repo path after it.
+            const match = remoteUrl.match(/https:\/\/([^@]+)@github\.com\/(.+)/);
             if (match) {
-                const [, username, token, repoPath] = match;
+                const [, credPart, repoPath] = match;
 
-                // Store credentials in Git credential store
-                await storeCredentialsInGitStore(username, token);
+                // If the credential part is a user:token pair, persist it to the
+                // Git credential store so auth keeps working after we strip the URL.
+                // For the bare-token shape the PAT is already in the store from
+                // sign-in, so we just strip it from the URL.
+                if (credPart.includes(':')) {
+                    const colonIndex = credPart.indexOf(':');
+                    const username = credPart.slice(0, colonIndex);
+                    const token = credPart.slice(colonIndex + 1);
+                    await storeCredentialsInGitStore(username, token);
+                }
 
-                // Remove credentials from URL - preserve the exact path format
-                let cleanPath = repoPath;
-                // Clean up any trailing whitespace or issues
-                cleanPath = cleanPath.trim();
-                // Ensure proper format
+                // Strip credentials entirely — a clean, identity-free URL. The
+                // credential.helper=store + host-only lookup supplies auth.
+                let cleanPath = repoPath.trim();
                 if (!cleanPath.endsWith('.git')) {
                     cleanPath = cleanPath.replace(/\/$/, ''); // Remove trailing slash if present
                 }
-                const cleanUrl = `https://${username}@github.com/${cleanPath}`;
+                const cleanUrl = `https://github.com/${cleanPath}`;
 
                 await execPromise(`git remote set-url origin "${cleanUrl}"`, {
                     cwd: workspaceRoot,
