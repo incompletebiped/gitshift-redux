@@ -295,7 +295,11 @@ export async function quickCloneRepository(context: vscode.ExtensionContext): Pr
       // never persisted inside the project.
       const clonedRepoFsPath = `${cloneDir}/${repoName}`;
       try {
-        await execPromise(`git remote set-url origin "${httpsUrl}"`, {
+        // Clean URL keeps the USERNAME (not the token) so git-credential-store —
+        // which matches on host only — picks THIS account's PAT instead of whatever
+        // github.com entry happens to be first. Critical for multi-account setups.
+        const cleanAuthedUrl = httpsUrl.replace('https://', `https://${auth.username}@`);
+        await execPromise(`git remote set-url origin "${cleanAuthedUrl}"`, {
           cwd: clonedRepoFsPath,
           env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
         });
