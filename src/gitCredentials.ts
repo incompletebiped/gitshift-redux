@@ -312,24 +312,36 @@ export async function migrateEmbeddedCredentials(): Promise<void> {
             if (match) {
                 const [, credPart, repoPath] = match;
 
-                // If the credential part is a user:token pair, persist it to the
-                // Git credential store so auth keeps working after we strip the URL.
-                // For the bare-token shape the PAT is already in the store from
-                // sign-in, so we just strip it from the URL.
-                if (credPart.includes(':')) {
-                    const colonIndex = credPart.indexOf(':');
-                    const username = credPart.slice(0, colonIndex);
-                    const token = credPart.slice(colonIndex + 1);
-                    await storeCredentialsInGitStore(username, token);
-                }
-
-                // Strip credentials entirely — a clean, identity-free URL. The
-                // credential.helper=store + host-only lookup supplies auth.
                 let cleanPath = repoPath.trim();
                 if (!cleanPath.endsWith('.git')) {
                     cleanPath = cleanPath.replace(/\/$/, ''); // Remove trailing slash if present
                 }
-                const cleanUrl = `https://github.com/${cleanPath}`;
+
+                // Determine the account username to keep in the clean URL. The
+                // URL must retain the username (not the token) so git-credential-store
+                // — which matches on host only — resolves THIS account's PAT rather
+                // than whatever github.com entry is first. Dropping it breaks
+                // multi-account setups.
+                let username: string;
+                if (credPart.includes(':')) {
+                    // Shape: https://user:token@github.com — username is authoritative.
+                    const colonIndex = credPart.indexOf(':');
+                    username = credPart.slice(0, colonIndex);
+                    const token = credPart.slice(colonIndex + 1);
+                    // Persist to the store so auth survives once the token leaves the URL.
+                    await storeCredentialsInGitStore(username, token);
+                } else {
+                    // Shape: https://token@github.com — the token is NOT the username,
+                    // so we can't read it from the URL. Fall back to the repo owner
+                    // (first path segment), which matches the account for personal repos.
+                    // The PAT is already in the store from sign-in. The authoritative
+                    // username is restored on the next explicit account switch.
+                    username = cleanPath.split('/')[0] || '';
+                }
+
+                const cleanUrl = username
+                    ? `https://${username}@github.com/${cleanPath}`
+                    : `https://github.com/${cleanPath}`;
 
                 await execPromise(`git remote set-url origin "${cleanUrl}"`, {
                     cwd: workspaceRoot,
