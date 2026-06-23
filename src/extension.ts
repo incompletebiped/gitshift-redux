@@ -1272,24 +1272,29 @@ export async function activate(context: vscode.ExtensionContext) {
       const repo = await createGitHubRepository(token, repoName, description || '', visibility.isPrivate);
       gitshiftOutputChannel?.appendLine(`[publishToGitHub] Repository created: ${repo.html_url}`);
 
+      // Store credentials before adding any remote — this prevents Cursor's
+      // built-in GitHub OAuth popup, which fires the moment a bare github.com
+      // URL appears as a remote.
+      await configureGitCredentials(username, token);
+
+      // Build the credential-bearing URL directly so the remote is never bare.
+      const repoPath = `${repo.owner.login}/${repo.name}`;
+      const authenticatedUrl = `https://${username}@github.com/${repoPath}.git`;
+
       // Add remote
       const { addRemote } = await import('./gitOperations');
       try {
-        await addRemote('origin', repo.clone_url);
+        await addRemote('origin', authenticatedUrl);
       } catch (error: any) {
         // Remote might already exist
         if (error.message?.includes('already exists')) {
           const { removeRemote } = await import('./gitOperations');
           await removeRemote('origin');
-          await addRemote('origin', repo.clone_url);
+          await addRemote('origin', authenticatedUrl);
         } else {
           throw error;
         }
       }
-
-      // Update remote URL with token for authentication
-      const { updateRemoteUrlWithToken } = await import('./gitCredentials');
-      await updateRemoteUrlWithToken('origin', token, username);
 
       // Stage all files
       const { stageAll } = await import('./gitOperations');
@@ -1515,6 +1520,9 @@ export async function activate(context: vscode.ExtensionContext) {
       console.warn('[GitShift] Credential migration failed:', error);
     }
   }, 3000);
+
+  // Check for a newer GitHub release once per day (non-blocking)
+  setTimeout(() => checkForUpdates(context).catch(() => {}), 5000);
 }
 
 // Guard flag — prevents concurrent startup activations from racing each other
@@ -3060,6 +3068,73 @@ async function showTokenTutorial(_account?: GitHubAccount): Promise<void> {
       })
     );
   });
+}
+
+/**
+ * Compares two semver strings; returns true if `latest` is strictly newer than `current`.
+ */
+function isNewerVersion(latest: string, current: string): boolean {
+  const parse = (v: string) => v.split('.').map(Number);
+  const [lMaj, lMin, lPatch] = parse(latest);
+  const [cMaj, cMin, cPatch] = parse(current);
+  if (lMaj !== cMaj) { return lMaj > cMaj; }
+  if (lMin !== cMin) { return lMin > cMin; }
+  return lPatch > cPatch;
+}
+
+/**
+ * Checks GitHub Releases for a newer version once per day.
+ * Shows a notification with a link to the release page if one is found.
+ */
+async function checkForUpdates(context: vscode.ExtensionContext): Promise<void> {
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  const lastCheck = context.globalState.get<number>('gitshift.lastUpdateCheck', 0);
+  const now = Date.now();
+  if (now - lastCheck < ONE_DAY_MS) { return; }
+
+  // Mark the check time immediately so a network failure doesn't cause a retry storm
+  await context.globalState.update('gitshift.lastUpdateCheck', now);
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const https = require('https') as typeof import('https');
+    const options: import('https').RequestOptions = {
+      hostname: 'api.github.com',
+      path: '/repos/incompletebiped/gitshift-redux/releases/latest',
+      headers: { 'User-Agent': 'gitshift-redux-update-check' }
+    };
+
+    const body = await new Promise<string>((resolve, reject) => {
+      const req = https.get(options, (res) => {
+        let raw = '';
+        res.on('data', (chunk: Buffer) => { raw += chunk.toString(); });
+        res.on('end', () => resolve(raw));
+      });
+      req.on('error', reject);
+      req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')); });
+    });
+
+    const release = JSON.parse(body) as { tag_name?: string; html_url?: string };
+    const latestVersion = release.tag_name?.replace(/^v/, '');
+    if (!latestVersion || !release.html_url) { return; }
+
+    const currentVersion = vscode.extensions.getExtension('incompletebiped.gitshift-redux')?.packageJSON?.version as string | undefined;
+    if (!currentVersion) { return; }
+
+    if (isNewerVersion(latestVersion, currentVersion)) {
+      gitshiftOutputChannel?.appendLine(`[GitShift] Update available: v${latestVersion} (installed: v${currentVersion})`);
+      const action = await vscode.window.showInformationMessage(
+        `GitShift Redux v${latestVersion} is available — you have v${currentVersion}.`,
+        'Open Release Page',
+        'Dismiss'
+      );
+      if (action === 'Open Release Page') {
+        await vscode.env.openExternal(vscode.Uri.parse(release.html_url));
+      }
+    }
+  } catch {
+    // Silent — network errors should never surface to the user
+  }
 }
 
 /**
