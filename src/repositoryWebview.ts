@@ -228,12 +228,20 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
   }
 
   private async _handleStageFile(file: string) {
-    await stageFiles([file]);
+    try {
+      await stageFiles([file]);
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`Could not stage "${file}": ${error.message}`);
+    }
     await this.refresh();
   }
 
   private async _handleUnstageFile(file: string) {
-    await unstageFiles([file]);
+    try {
+      await unstageFiles([file]);
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`Could not unstage "${file}": ${error.message}`);
+    }
     await this.refresh();
   }
 
