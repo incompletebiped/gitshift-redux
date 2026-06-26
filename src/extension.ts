@@ -77,6 +77,26 @@ function ensureGitOnPath(log: (message: string) => void): void {
   }
 }
 
+// Trust all directories globally so git works on removable/network drives
+// that don't record filesystem ownership (exFAT, FAT32, network shares).
+// This mirrors the guidance Git itself prints when it hits dubious ownership.
+function ensureSafeDirectoryGlobal(log: (message: string) => void): void {
+  const { exec } = require('child_process') as typeof import('child_process');
+  exec('git config --global --get-all safe.directory', (err: any, stdout: string) => {
+    if (stdout && stdout.split('\n').some((l: string) => l.trim() === '*')) {
+      log('[safe.directory] Already set to * globally — skipping');
+      return;
+    }
+    exec('git config --global --add safe.directory *', (err2: any) => {
+      if (err2) {
+        log(`[safe.directory] Could not set safe.directory=* : ${err2.message}`);
+      } else {
+        log('[safe.directory] Set safe.directory=* in global git config');
+      }
+    });
+  });
+}
+
 // Global instances
 let treeProvider: any;
 let sidebarProvider: SidebarProvider;
@@ -106,6 +126,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // forks on Windows often launch the ext host without Git on PATH). Must run
   // before any git command, otherwise repo detection and account switching fail.
   ensureGitOnPath((message) => gitshiftOutputChannel.appendLine(message));
+  ensureSafeDirectoryGlobal((message) => gitshiftOutputChannel.appendLine(message));
 
   // Store context globally for secret storage access
   extensionContext = context;
