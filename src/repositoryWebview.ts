@@ -30,6 +30,7 @@ import {
 import { isGitRepository } from './gitManager';
 import { CommitDetailsPanel } from './commitDetailsWebview';
 import { generateDetailedCommitMessage, generateFallbackMessage, LanguageModelGenerationError } from './commitMessageGenerator';
+import { isNonFastForwardError, getFriendlyPushErrorMessage } from './gitErrorMessages';
 
 export class RepositoryProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
@@ -143,7 +144,22 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       } catch (error: any) {
         // Show modal dialog for push errors
         const isPushError = data.type === 'push' || data.type === 'commitAndPush';
-        if (isPushError) {
+        if (isPushError && isNonFastForwardError(error.message)) {
+          const choice = await vscode.window.showErrorMessage(
+            `GitShift: ${getFriendlyPushErrorMessage(error.message)}`,
+            { modal: true },
+            'Pull'
+          );
+          if (choice === 'Pull') {
+            try {
+              await pull();
+              vscode.window.showInformationMessage('Pulled from remote. You can now try pushing again.');
+              await this.refresh();
+            } catch (pullError: any) {
+              vscode.window.showErrorMessage(`GitShift: Pull failed — ${pullError.message}`);
+            }
+          }
+        } else if (isPushError) {
           vscode.window.showErrorMessage(`GitShift: ${error.message}`, { modal: true });
         } else {
           vscode.window.showErrorMessage(`GitShift: ${error.message}`);
@@ -271,7 +287,24 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       vscode.window.showInformationMessage('Pushed to remote');
       await this.refresh();
     } catch (pushError: any) {
-      vscode.window.showErrorMessage(`GitShift: Push failed — ${pushError.message}`, { modal: true });
+      if (isNonFastForwardError(pushError.message)) {
+        const choice = await vscode.window.showErrorMessage(
+          `GitShift: Your commit was saved locally, but the push failed. ${getFriendlyPushErrorMessage(pushError.message)}`,
+          { modal: true },
+          'Pull'
+        );
+        if (choice === 'Pull') {
+          try {
+            await pull();
+            vscode.window.showInformationMessage('Pulled from remote. You can now try pushing again.');
+            await this.refresh();
+          } catch (pullError: any) {
+            vscode.window.showErrorMessage(`GitShift: Pull failed — ${pullError.message}`);
+          }
+        }
+      } else {
+        vscode.window.showErrorMessage(`GitShift: Push failed — ${pushError.message}`, { modal: true });
+      }
     }
     if (this._view) {
       this._view.webview.postMessage({ type: 'clearLoading', buttonId: 'commitPushBtn' });

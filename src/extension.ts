@@ -21,6 +21,7 @@ import { GitHubAccount } from './types';
 import { signInToGitHub, getGitHubUser, getGitHubEmails, getGitHubSessions, getGitHubSessionByAccountId, initAuthSecrets, validateGitHubToken, storeGitHubToken, deleteGitHubToken, getGitHubToken, checkRepoAccess, checkCollaboratorAccess, getAllStoredTokens, createGitHubRepository } from './githubAuth';
 import { quickCloneRepository } from './repoQuickClone';
 import { configureGitCredentials, updateRemoteUrlWithToken, getRemoteUrl, parseGitHubUrl, migrateEmbeddedCredentials } from './gitCredentials';
+import { isNonFastForwardError, getFriendlyPushErrorMessage } from './gitErrorMessages';
 
 /**
  * Ensure Git is reachable on the extension host's PATH (fixes #9).
@@ -2758,6 +2759,22 @@ async function handleGitOperation(operationName: string, operation: () => Promis
     }
     await operation();
   } catch (error: any) {
+    if ((operationName === 'push' || operationName === 'sync') && isNonFastForwardError(error.message)) {
+      const choice = await vscode.window.showErrorMessage(
+        `GitShift: ${getFriendlyPushErrorMessage(error.message)}`,
+        { modal: true },
+        'Pull'
+      );
+      if (choice === 'Pull') {
+        await handleGitOperation('pull', async () => {
+          const { pull } = await import('./gitOperations');
+          await pull();
+          vscode.window.showInformationMessage('Pulled from remote. You can now try pushing again.');
+          if (repositoryProvider) await repositoryProvider.refresh();
+        });
+      }
+      return;
+    }
     vscode.window.showErrorMessage(`Failed to ${operationName}: ${error.message}`);
   }
 }
