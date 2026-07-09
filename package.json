@@ -2,11 +2,7 @@
   "name": "gitshift-redux",
   "displayName": "GitShift Redux",
   "description": "Manage and seamlessly switch between multiple GitHub accounts within VS Code. Easily handle authentication, commit and push as different users, use personal access tokens, and keep your Git configuration in sync across workspaces. Ideal for developers with personal, work, or organizational GitHub accounts.",
-<<<<<<< HEAD
-  "version": "1.1.4",
-=======
   "version": "1.1.7",
->>>>>>> 94d45031f91d41c3ab5def1918beee73a6e3f456
   "publisher": "incompletebiped",
   "icon": "images/icon.png",
   "homepage": "https://github.com/incompletebiped/gitshift-redux",

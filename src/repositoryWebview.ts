@@ -30,7 +30,7 @@ import {
 import { isGitRepository } from './gitManager';
 import { CommitDetailsPanel } from './commitDetailsWebview';
 import { generateDetailedCommitMessage, generateFallbackMessage, LanguageModelGenerationError } from './commitMessageGenerator';
-import { isNonFastForwardError, getFriendlyPushErrorMessage } from './gitErrorMessages';
+import { classifyPushError, getFriendlyPushErrorMessage } from './gitErrorMessages';
 
 export class RepositoryProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
@@ -144,23 +144,8 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       } catch (error: any) {
         // Show modal dialog for push errors
         const isPushError = data.type === 'push' || data.type === 'commitAndPush';
-        if (isPushError && isNonFastForwardError(error.message)) {
-          const choice = await vscode.window.showErrorMessage(
-            `GitShift: ${getFriendlyPushErrorMessage(error.message)}`,
-            { modal: true },
-            'Pull'
-          );
-          if (choice === 'Pull') {
-            try {
-              await pull();
-              vscode.window.showInformationMessage('Pulled from remote. You can now try pushing again.');
-              await this.refresh();
-            } catch (pullError: any) {
-              vscode.window.showErrorMessage(`GitShift: Pull failed — ${pullError.message}`);
-            }
-          }
-        } else if (isPushError) {
-          vscode.window.showErrorMessage(`GitShift: ${error.message}`, { modal: true });
+        if (isPushError) {
+          await this._handlePushErrorDialog(error);
         } else {
           vscode.window.showErrorMessage(`GitShift: ${error.message}`);
         }
@@ -295,24 +280,7 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       vscode.window.showInformationMessage('Pushed to remote');
       await this.refresh();
     } catch (pushError: any) {
-      if (isNonFastForwardError(pushError.message)) {
-        const choice = await vscode.window.showErrorMessage(
-          `GitShift: Your commit was saved locally, but the push failed. ${getFriendlyPushErrorMessage(pushError.message)}`,
-          { modal: true },
-          'Pull'
-        );
-        if (choice === 'Pull') {
-          try {
-            await pull();
-            vscode.window.showInformationMessage('Pulled from remote. You can now try pushing again.');
-            await this.refresh();
-          } catch (pullError: any) {
-            vscode.window.showErrorMessage(`GitShift: Pull failed — ${pullError.message}`);
-          }
-        }
-      } else {
-        vscode.window.showErrorMessage(`GitShift: Push failed — ${pushError.message}`, { modal: true });
-      }
+      await this._handlePushErrorDialog(pushError, 'Your commit was saved locally, but the push failed. ');
     }
     if (this._view) {
       this._view.webview.postMessage({ type: 'clearLoading', buttonId: 'commitPushBtn' });
@@ -416,6 +384,44 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
     await this.refresh();
     if (this._view) {
       this._view.webview.postMessage({ type: 'clearLoading', buttonId: 'pushBtn' });
+    }
+  }
+
+  /**
+   * Shows a plain-language modal for a failed push and offers a one-click
+   * fix when we recognize the failure (pull-then-push, re-authenticate).
+   * Falls back to the raw git error for anything we don't recognize.
+   */
+  private async _handlePushErrorDialog(error: any, contextPrefix: string = ''): Promise<void> {
+    const kind = classifyPushError(error.message);
+    const friendly = getFriendlyPushErrorMessage(error.message);
+
+    if (kind === 'non-fast-forward') {
+      const choice = await vscode.window.showErrorMessage(
+        `GitShift: ${contextPrefix}${friendly}`,
+        { modal: true },
+        'Pull'
+      );
+      if (choice === 'Pull') {
+        try {
+          await pull();
+          vscode.window.showInformationMessage('Pulled from remote. You can now try pushing again.');
+          await this.refresh();
+        } catch (pullError: any) {
+          vscode.window.showErrorMessage(`GitShift: Pull failed — ${pullError.message}`);
+        }
+      }
+    } else if (kind === 'workflow-scope') {
+      const choice = await vscode.window.showErrorMessage(
+        `GitShift: ${contextPrefix}${friendly}`,
+        { modal: true },
+        'Sign In Again'
+      );
+      if (choice === 'Sign In Again') {
+        await vscode.commands.executeCommand('gitshift.signInWithGitHub');
+      }
+    } else {
+      vscode.window.showErrorMessage(`GitShift: ${contextPrefix}${error.message}`, { modal: true });
     }
   }
 
