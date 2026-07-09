@@ -54,7 +54,7 @@ export function getFriendlyPushErrorMessage(message: string | undefined): string
     case 'non-fast-forward':
       return "The GitHub repo has changes you don't have on your computer yet. Click \"Pull\" to get those changes, then try pushing again.";
     case 'workflow-scope':
-      return "This push includes changes to a workflow file (in .github/workflows/), and your current GitHub sign-in isn't allowed to update those. If you signed in with GitHub, click \"Sign In Again\" to grant that permission. If you're using a Personal Access Token, edit it on GitHub.com and turn on the \"workflow\" scope, then try again.";
+      return "GitShift needs an updated Personal Access Token. This push changes a file in .github/workflows/, and the token GitShift has on file for this account doesn't have \"workflow\" permission — usually because it's stale or was replaced. Click \"Update Token\" and paste a PAT with the \"repo\" and \"workflow\" scopes enabled.";
     default:
       return message || 'Unknown error';
   }

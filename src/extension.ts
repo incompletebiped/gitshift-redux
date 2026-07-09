@@ -2667,8 +2667,14 @@ async function autoImportGitHubAccounts(): Promise<void> {
           importedCount++;
         }
 
-        // Store token (this also registers it in the global registry)
-        await storeGitHubToken(user.login, session.accessToken);
+        // Only store the session token if this account has no token yet.
+        // GitShift is PAT-first — never let a silently-detected VS Code/Cursor
+        // OAuth session (e.g. from Copilot or Settings Sync) clobber a token
+        // the user manually added via "Add/Replace Token".
+        const existingToken = await getGitHubToken(user.login);
+        if (!existingToken) {
+          await storeGitHubToken(user.login, session.accessToken);
+        }
 
       } catch (error) {
         console.error('Failed to import VS Code session:', error);
@@ -2805,10 +2811,10 @@ async function handleGitOperation(operationName: string, operation: () => Promis
         const choice = await vscode.window.showErrorMessage(
           `GitShift: ${getFriendlyPushErrorMessage(error.message)}`,
           { modal: true },
-          'Sign In Again'
+          'Update Token'
         );
-        if (choice === 'Sign In Again') {
-          await vscode.commands.executeCommand('gitshift.signInWithGitHub');
+        if (choice === 'Update Token') {
+          await vscode.commands.executeCommand('gitshift.addToken');
         }
         return;
       }

@@ -5,6 +5,15 @@ All notable changes to the GitShift extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-09
+
+### Fixed
+
+- **Manually-added PAT silently overwritten by a stale OAuth session**: on every activation, `autoImportGitHubAccounts` silently checked for a cached VS Code/Cursor GitHub OAuth session (no popup) and, if one existed for an account's username, unconditionally overwrote that account's stored token with the OAuth session token — even when a Personal Access Token had been manually added via "Add/Replace Token." This could silently downgrade a working PAT (with full scopes) to an OAuth App token lacking `workflow` scope, causing pushes touching `.github/workflows/` to fail with no indication the credential had changed. The auto-import now only stores a session token for accounts that don't already have one; an existing manually-added token is never overwritten.
+- **Misleading push-failure messaging**: the `workflow-scope` push error dialog suggested clicking "Sign In Again," which triggered the OAuth sign-in flow this extension is designed to avoid. The message now plainly states that GitShift needs an updated Personal Access Token and the button ("Update Token") opens the "Add/Replace Token" flow instead.
+
+---
+
 ## [1.1.1] - 2026-06-04
 
 ### Fixed

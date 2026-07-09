@@ -415,10 +415,10 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       const choice = await vscode.window.showErrorMessage(
         `GitShift: ${contextPrefix}${friendly}`,
         { modal: true },
-        'Sign In Again'
+        'Update Token'
       );
-      if (choice === 'Sign In Again') {
-        await vscode.commands.executeCommand('gitshift.signInWithGitHub');
+      if (choice === 'Update Token') {
+        await vscode.commands.executeCommand('gitshift.addToken');
       }
     } else {
       vscode.window.showErrorMessage(`GitShift: ${contextPrefix}${error.message}`, { modal: true });
