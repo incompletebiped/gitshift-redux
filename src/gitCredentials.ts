@@ -161,7 +161,7 @@ export async function updateRemoteUrlWithToken(remoteName: string, token: string
 
         if (currentUrl.startsWith('git@github.com:')) {
             // Convert SSH to HTTPS (clean, no token)
-            const repoPath = currentUrl.replace('git@github.com:', '').replace('.git', '');
+            const repoPath = currentUrl.replace('git@github.com:', '').replace(/\.git$/, '');
             cleanUrl = `https://${username}@github.com/${repoPath}.git`;
         } else if (currentUrl.includes('github.com')) {
             // Remove any embedded credentials and create clean URL
@@ -170,10 +170,10 @@ export async function updateRemoteUrlWithToken(remoteName: string, token: string
 
             if (currentUrl.includes('@github.com/')) {
                 // Has embedded credentials - extract path after @github.com/
-                repoPath = currentUrl.split('@github.com/')[1]?.replace('.git', '') || '';
+                repoPath = currentUrl.split('@github.com/')[1]?.replace(/\.git$/, '') || '';
             } else if (currentUrl.includes('github.com/')) {
                 // No credentials, just extract path after github.com/
-                repoPath = currentUrl.split('github.com/')[1]?.replace('.git', '') || '';
+                repoPath = currentUrl.split('github.com/')[1]?.replace(/\.git$/, '') || '';
             } else {
                 throw new Error('Could not parse repository URL');
             }
@@ -226,7 +226,7 @@ export function parseGitHubUrl(url: string): { owner: string; repo: string } | n
     try {
         // Handle SSH URLs: git@github.com:owner/repo.git
         if (url.startsWith('git@github.com:')) {
-            const parts = url.replace('git@github.com:', '').replace('.git', '').split('/');
+            const parts = url.replace('git@github.com:', '').replace(/\.git$/, '').split('/');
             if (parts.length === 2) {
                 return { owner: parts[0], repo: parts[1] };
             }
@@ -234,7 +234,7 @@ export function parseGitHubUrl(url: string): { owner: string; repo: string } | n
 
         // Handle HTTPS URLs: https://github.com/owner/repo.git
         if (url.includes('github.com/')) {
-            const parts = url.split('github.com/')[1]?.replace('.git', '').split('/');
+            const parts = url.split('github.com/')[1]?.replace(/\.git$/, '').split('/');
             if (parts && parts.length >= 2) {
                 return { owner: parts[0], repo: parts[1] };
             }

@@ -666,7 +666,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const dirName = await vscode.window.showInputBox({
       prompt: 'Enter directory name',
-      value: url.split('/').pop()?.replace('.git', '') || 'repo'
+      value: url.split('/').pop()?.replace(/\.git$/, '') || 'repo'
     });
     if (!dirName) return;
 
