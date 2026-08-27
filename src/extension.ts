@@ -18,7 +18,7 @@ import { RepositoryProvider } from './repositoryWebview';
 import { ContributionsProvider } from './contributionsWebview';
 import { SupportProvider } from './supportWebview';
 import { GitHubAccount } from './types';
-import { signInToGitHub, getGitHubUser, getGitHubEmails, getGitHubSessions, getGitHubSessionByAccountId, initAuthSecrets, validateGitHubToken, storeGitHubToken, deleteGitHubToken, getGitHubToken, checkRepoAccess, checkCollaboratorAccess, getAllStoredTokens, createGitHubRepository } from './githubAuth';
+import { signInToGitHub, getGitHubUser, getGitHubEmails, getGitHubSessions, getGitHubSessionByAccountId, initAuthSecrets, validateGitHubToken, storeGitHubToken, deleteGitHubToken, getGitHubToken, checkRepoAccess, checkCollaboratorAccess, getAllStoredTokens, createGitHubRepository, getGitHubRepository, findOpenPullRequest, createPullRequest } from './githubAuth';
 import { quickCloneRepository } from './repoQuickClone';
 import { configureGitCredentials, updateRemoteUrlWithToken, getRemoteUrl, parseGitHubUrl, migrateEmbeddedCredentials } from './gitCredentials';
 import { classifyPushError, getFriendlyPushErrorMessage } from './gitErrorMessages';
@@ -109,6 +109,12 @@ let contributionsProvider: ContributionsProvider;
 let supportProvider: SupportProvider;
 let extensionContext: vscode.ExtensionContext;
 let gitshiftOutputChannel: vscode.OutputChannel;
+
+// Cache of each repo's real default branch (key: "owner/repo"), populated the
+// first time it's looked up so the post-push PR offer doesn't re-fetch it on
+// every single push.
+const defaultBranchCache = new Map<string, string>();
+const commonDefaultBranchNames = new Set(['main', 'master', 'develop', 'dev', 'staging', 'production', 'trunk']);
 
 /**
  * Activates the extension
@@ -576,6 +582,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register git operation commands
   const pullCommand = vscode.commands.registerCommand('gitshift.pull', async () => {
     await handleGitOperation('pull', async () => {
+      await ensureRepoCredentialsForActiveIdentity();
       const { pull } = await import('./gitOperations');
       await pull();
       vscode.window.showInformationMessage('Pulled from remote');
@@ -583,21 +590,47 @@ export async function activate(context: vscode.ExtensionContext) {
     });
   });
 
+  // Internal, non-user-facing command: repairs repo-local credentials/remote
+  // URL if they've drifted from the active account. Invoked by the
+  // repository webview immediately before push/pull/fetch so the fix
+  // applies even if startup auto-activation didn't catch it.
+  const ensureRepoCredentialsCommand = vscode.commands.registerCommand('gitshift._ensureRepoCredentials', async () => {
+    await ensureRepoCredentialsForActiveIdentity();
+  });
+
+  // Internal, non-user-facing command: the post-push "create a pull request?"
+  // offer. Invoked by the repository webview after a successful push; the
+  // command-palette push/sync commands below call the underlying function
+  // directly since they're in the same module.
+  const offerCreatePullRequestCommand = vscode.commands.registerCommand('gitshift._offerCreatePullRequest', async (branchName: string) => {
+    await offerCreatePullRequestAfterPush(branchName);
+  });
+
   const pushCommand = vscode.commands.registerCommand('gitshift.push', async () => {
     await handleGitOperation('push', async () => {
-      const { push } = await import('./gitOperations');
+      await ensureRepoCredentialsForActiveIdentity();
+      const { push, getCurrentBranch } = await import('./gitOperations');
       await push();
       vscode.window.showInformationMessage('Pushed to remote');
       if (repositoryProvider) await repositoryProvider.refresh();
+      const branchName = await getCurrentBranch();
+      if (branchName && branchName !== 'unknown') {
+        void offerCreatePullRequestAfterPush(branchName);
+      }
     });
   });
 
   const syncCommand = vscode.commands.registerCommand('gitshift.sync', async () => {
     await handleGitOperation('sync', async () => {
-      const { sync } = await import('./gitOperations');
+      await ensureRepoCredentialsForActiveIdentity();
+      const { sync, getCurrentBranch } = await import('./gitOperations');
       await sync();
       vscode.window.showInformationMessage('Synced with remote');
       if (repositoryProvider) await repositoryProvider.refresh();
+      const branchName = await getCurrentBranch();
+      if (branchName && branchName !== 'unknown') {
+        void offerCreatePullRequestAfterPush(branchName);
+      }
     });
   });
 
@@ -619,6 +652,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const moreActionsCommand = vscode.commands.registerCommand('gitshift.moreActions', async () => {
     const actions = [
+      { label: '$(sync) Sync (Pull then Push)', command: 'gitshift.sync' },
       { label: '$(cloud-download) Clone Repository...', command: 'gitshift.clone' },
       { label: '$(git-branch) Checkout to...', command: 'gitshift.checkout' },
       { label: '$(archive) Stash Changes', command: 'gitshift.stash' },
@@ -750,7 +784,7 @@ export async function activate(context: vscode.ExtensionContext) {
     if (!branchName) return;
 
     await handleGitOperation('create branch', async () => {
-      const { createBranch, checkoutBranch } = await import('./gitOperations');
+      const { createBranch, checkoutBranch, push } = await import('./gitOperations');
       await createBranch(branchName);
       const shouldCheckout = await vscode.window.showQuickPick(['Yes', 'No'], {
         placeHolder: 'Checkout to new branch?'
@@ -760,6 +794,15 @@ export async function activate(context: vscode.ExtensionContext) {
       }
       vscode.window.showInformationMessage(`Created branch ${branchName}`);
       if (repositoryProvider) await repositoryProvider.refresh();
+
+      const shouldPush = await vscode.window.showQuickPick(['Yes', 'No'], {
+        placeHolder: `Push branch '${branchName}' to remote now?`
+      });
+      if (shouldPush === 'Yes') {
+        await push(branchName);
+        vscode.window.showInformationMessage(`Pushed ${branchName} to remote`);
+        if (repositoryProvider) await repositoryProvider.refresh();
+      }
     });
   });
 
@@ -1415,6 +1458,8 @@ export async function activate(context: vscode.ExtensionContext) {
     quickCloneCommand,
     addTokenCommand,
     removeTokenCommand,
+    ensureRepoCredentialsCommand,
+    offerCreatePullRequestCommand,
     pullCommand,
     pushCommand,
     syncCommand,
@@ -2367,6 +2412,239 @@ function logError(message: string, error?: any): void {
 }
 
 /**
+ * Extracts the embedded username from a `https://<user>[:<token>]@github.com/...`
+ * remote URL, or null if the URL has no embedded credentials.
+ */
+function getRemoteEmbeddedUsername(url: string): string | null {
+  const match = url.match(/^https:\/\/([^@/]+)@github\.com\//);
+  if (!match) {
+    return null;
+  }
+  const credPart = match[1];
+  const username = credPart.includes(':') ? credPart.split(':')[0] : credPart;
+  return username || null;
+}
+
+/**
+ * Checks whether the current repo's remote URL is still wired up for a
+ * different (or no) account than `account`, and if so, re-runs the full
+ * switch-account flow (git identity, credential.helper, remote URL rewrite)
+ * to repair it. Returns true if a repair was attempted.
+ *
+ * This matters because `git config user.name` (used to detect "already
+ * active") falls back to the GLOBAL identity when a repo has no local
+ * override — so a freshly cloned repo can appear to already match an
+ * account purely via global identity while its local credential.helper and
+ * remote URL were never configured for it. Cheap, no API calls unless a
+ * repair is actually needed.
+ */
+async function repairRepoCredentialsIfMismatched(account: GitHubAccount, logPrefix: string): Promise<boolean> {
+  let credentialsNeedRepair = false;
+  try {
+    const remoteUrl = await getGitRemoteUrl();
+    if (remoteUrl && remoteUrl.includes('github.com')) {
+      const embeddedUsername = getRemoteEmbeddedUsername(remoteUrl);
+      if (embeddedUsername && account.username && embeddedUsername.toLowerCase() !== account.username.toLowerCase()) {
+        credentialsNeedRepair = true;
+        log(`${logPrefix}: Identity matches ${account.username}, but remote URL is configured for a different account ("${embeddedUsername}") — repairing`);
+      }
+    }
+  } catch (error) {
+    logError(`${logPrefix}: Could not verify remote credentials, skipping repair check`, error);
+    return false;
+  }
+
+  if (!credentialsNeedRepair) {
+    return false;
+  }
+
+  log(`${logPrefix}: Reactivating ${account.label || account.name} to repair repo credentials`);
+  try {
+    await handleSwitchToAccount(account);
+    log(`${logPrefix}: Successfully repaired repo credentials`);
+  } catch (switchError: any) {
+    logError(`${logPrefix}: Failed to repair repo credentials`, switchError);
+  }
+  return true;
+}
+
+/**
+ * Internal, non-user-facing repair check invoked right before a push/pull/
+ * fetch from the repository webview — guarantees the fix applies even if
+ * startup auto-activation didn't catch the mismatch (e.g. account switched,
+ * repo remote changed, or matching bugs in the startup path).
+ */
+async function ensureRepoCredentialsForActiveIdentity(): Promise<void> {
+  try {
+    if (!(await isGitRepository())) {
+      return;
+    }
+    const currentUser = await getCurrentGitUser();
+    if (!currentUser) {
+      return;
+    }
+    const accounts = await loadAccounts();
+    const matchingAccount = accounts.find(acc => acc.name === currentUser.name && acc.email === currentUser.email);
+    if (!matchingAccount) {
+      return;
+    }
+    await repairRepoCredentialsIfMismatched(matchingAccount, '[GitShift] Pre-push credential check');
+  } catch (error) {
+    logError('[GitShift] Pre-push credential check failed', error);
+  }
+}
+
+/**
+ * Resolves a usable GitHub token for whichever account is currently active,
+ * following the same account/token resolution steps used elsewhere (current
+ * git identity -> matching account -> stored token -> VS Code session
+ * fallback). Returns undefined if nothing is found — callers that use this
+ * for an unprompted background check must treat that as "silently do
+ * nothing", not an error.
+ */
+async function resolveActiveAccountToken(): Promise<{ token: string; username: string } | undefined> {
+  const currentUser = await getCurrentGitUser();
+  const accounts = await loadAccounts();
+  const account = currentUser
+    ? accounts.find(acc => acc.name === currentUser.name && acc.email === currentUser.email)
+    : undefined;
+
+  if (account?.username && account.authenticated) {
+    const token = await getGitHubToken(account.username);
+    if (token) {
+      return { token, username: account.username };
+    }
+  }
+
+  const sessions = await getGitHubSessions();
+  if (sessions.length > 0) {
+    try {
+      const user = await getGitHubUser(sessions[0].accessToken);
+      return { token: sessions[0].accessToken, username: user.login };
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Decides whether it's worth showing the "create a pull request?" offer at
+ * all. Only gates whether the notification appears — the real base branch
+ * used to actually create the PR is always re-fetched fresh, never guessed.
+ */
+function shouldOfferPullRequest(owner: string, repo: string, branchName: string): boolean {
+  const cached = defaultBranchCache.get(`${owner}/${repo}`);
+  if (cached) {
+    return cached !== branchName;
+  }
+  return !commonDefaultBranchNames.has(branchName.toLowerCase());
+}
+
+/**
+ * Prompts for a PR title and creates the pull request, opening it in the
+ * browser on success. Called once the user has explicitly opted in via the
+ * post-push notification — never runs unprompted.
+ */
+async function runCreatePullRequestFlow(
+  branchName: string,
+  ctx: { owner: string; repo: string; token: string; defaultBranch: string }
+): Promise<void> {
+  const title = await vscode.window.showInputBox({
+    prompt: 'Pull Request Title',
+    value: branchName,
+    ignoreFocusOut: true
+  });
+  if (!title) {
+    return;
+  }
+
+  try {
+    const pr = await createPullRequest(ctx.token, ctx.owner, ctx.repo, {
+      title,
+      head: branchName,
+      base: ctx.defaultBranch
+    });
+    vscode.window.showInformationMessage(`Pull request #${pr.number} created`);
+    try {
+      await vscode.env.openExternal(vscode.Uri.parse(pr.html_url));
+    } catch (openError: any) {
+      vscode.window.showErrorMessage(`Created the pull request, but couldn't open it: ${openError.message}`);
+    }
+  } catch (error: any) {
+    const message: string = error.message || '';
+    if (/pull request already exists/i.test(message)) {
+      vscode.window.showErrorMessage(`GitShift: A pull request for '${branchName}' already exists.`);
+    } else if (/no commits between/i.test(message)) {
+      vscode.window.showErrorMessage(`GitShift: There are no commits between '${branchName}' and '${ctx.defaultBranch}' to open a pull request for.`);
+    } else {
+      vscode.window.showErrorMessage(`GitShift: Failed to create pull request — ${message}`);
+    }
+  }
+}
+
+/**
+ * Silent, best-effort check run right after a successful push: if this looks
+ * like a real feature branch (not the repo's default branch) on a GitHub
+ * remote, offers to create a pull request for it — or to view one that
+ * already exists. Never throws, never surfaces an error; a hiccup here must
+ * not make a successful push look broken. Never prompts for auth.
+ */
+async function offerCreatePullRequestAfterPush(branchName: string): Promise<void> {
+  try {
+    const remoteUrl = await getRemoteUrl('origin');
+    if (!remoteUrl || !remoteUrl.includes('github.com')) {
+      return;
+    }
+    const repoInfo = parseGitHubUrl(remoteUrl);
+    if (!repoInfo) {
+      return;
+    }
+    const { owner, repo } = repoInfo;
+
+    if (!shouldOfferPullRequest(owner, repo, branchName)) {
+      return;
+    }
+
+    const resolved = await resolveActiveAccountToken();
+    if (!resolved) {
+      return;
+    }
+    const { token } = resolved;
+
+    const repoDetails = await getGitHubRepository(token, owner, repo);
+    defaultBranchCache.set(`${owner}/${repo}`, repoDetails.default_branch);
+    if (repoDetails.default_branch === branchName) {
+      return;
+    }
+
+    const existingPr = await findOpenPullRequest(token, owner, repo, branchName);
+    if (existingPr) {
+      const choice = await vscode.window.showInformationMessage(
+        `An open pull request already exists for '${branchName}'.`,
+        'View Pull Request'
+      );
+      if (choice === 'View Pull Request') {
+        await vscode.env.openExternal(vscode.Uri.parse(existingPr.html_url));
+      }
+      return;
+    }
+
+    const choice = await vscode.window.showInformationMessage(
+      `Create a pull request for '${branchName}'?`,
+      'Create Pull Request'
+    );
+    if (choice === 'Create Pull Request') {
+      await runCreatePullRequestFlow(branchName, { owner, repo, token, defaultBranch: repoDetails.default_branch });
+    }
+  } catch {
+    // Silent — this is a best-effort convenience offer, not a critical path.
+    // A GitHub API hiccup here must never make a successful push look broken.
+  }
+}
+
+/**
  * Automatically activates the first available account if no account is currently active
  */
 async function autoActivateFirstAccount(): Promise<void> {
@@ -2391,8 +2669,11 @@ async function autoActivateFirstAccount(): Promise<void> {
       );
 
       if (matchingAccount) {
-        // User is already set and matches an account, nothing to do
-        log('[GitShift] Auto-activation: Current user matches account, no activation needed');
+        const repaired = await repairRepoCredentialsIfMismatched(matchingAccount, '[GitShift] Auto-activation');
+        if (!repaired) {
+          // User is already set and matches an account, nothing to do
+          log('[GitShift] Auto-activation: Current user matches account, no activation needed');
+        }
         return;
       }
       log('[GitShift] Auto-activation: Current user does not match any account, will activate');

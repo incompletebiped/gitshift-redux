@@ -367,6 +367,103 @@ export async function createGitHubRepository(accessToken: string, name: string, 
     }
 }
 
+export interface PullRequestInfo {
+    html_url: string;
+    number: number;
+    title: string;
+}
+
+/**
+ * Gets repository metadata, primarily used to resolve the default branch
+ * as the base for a pull request.
+ */
+export async function getGitHubRepository(accessToken: string, owner: string, repo: string): Promise<{ default_branch: string; html_url: string }> {
+    try {
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'VSCode-GitShift'
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(`GitHub API error (${response.status}): ${response.statusText} ${errorText}`);
+        }
+
+        const data = await response.json() as { default_branch: string; html_url: string };
+        return data;
+    } catch (error: any) {
+        throw new Error(`Failed to get repository info: ${error.message}`);
+    }
+}
+
+/**
+ * Looks up an existing open pull request for a branch. Returns null on any
+ * failure or if none exists — this is used for an opportunistic, silent
+ * background check, never to surface an error.
+ */
+export async function findOpenPullRequest(accessToken: string, owner: string, repo: string, headBranch: string): Promise<PullRequestInfo | null> {
+    try {
+        const head = encodeURIComponent(`${owner}:${headBranch}`);
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls?state=open&head=${head}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'VSCode-GitShift'
+            }
+        });
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const data = await response.json() as PullRequestInfo[];
+        return data.length > 0 ? data[0] : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+/**
+ * Creates a pull request.
+ */
+export async function createPullRequest(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    params: { title: string; head: string; base: string; body?: string }
+): Promise<PullRequestInfo> {
+    try {
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'VSCode-GitShift'
+            },
+            body: JSON.stringify({
+                title: params.title,
+                head: params.head,
+                base: params.base,
+                body: params.body || ''
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(`GitHub API error (${response.status}): ${response.statusText} ${errorText}`);
+        }
+
+        const data = await response.json() as PullRequestInfo;
+        return data;
+    } catch (error: any) {
+        throw new Error(`Failed to create pull request: ${error.message}`);
+    }
+}
+
 /**
  * Checks if the user has push access to a specific repository
  * Uses the /repos endpoint which returns permissions for the authenticated user

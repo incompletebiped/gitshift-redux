@@ -331,9 +331,21 @@ export async function migrateEmbeddedCredentials(): Promise<void> {
                     // Persist to the store so auth survives once the token leaves the URL.
                     await storeCredentialsInGitStore(username, token);
                 } else {
-                    // Shape: https://token@github.com — the token is NOT the username,
-                    // so we can't read it from the URL. Fall back to the repo owner
-                    // (first path segment), which matches the account for personal repos.
+                    // Shape: https://<credPart>@github.com/... with no colon. This is
+                    // ambiguous by shape alone — it's EITHER a raw leftover token from
+                    // the quick-clone flow, OR an already-correct clean URL previously
+                    // written by configureGitCredentials/updateRemoteUrlWithToken
+                    // (https://<username>@github.com/...). Only treat it as a token
+                    // (and rewrite the username to the repo owner) when it actually
+                    // looks like a GitHub token — usernames never contain underscores
+                    // or match these prefixes, so this is a safe discriminator.
+                    // Otherwise leave the URL untouched: rewriting a correct personal
+                    // username to the repo's org/owner name breaks auth for anyone
+                    // pushing to an org-owned repo under their own account (the normal
+                    // setup for client repos owned by an org, pushed by an individual).
+                    if (!/^(ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)/.test(credPart)) {
+                        return;
+                    }
                     // The PAT is already in the store from sign-in. The authoritative
                     // username is restored on the next explicit account switch.
                     username = cleanPath.split('/')[0] || '';

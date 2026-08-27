@@ -335,9 +335,29 @@ export async function getStashes(): Promise<string[]> {
 }
 
 /**
+ * Checks whether the current branch has an upstream tracking branch
+ */
+async function hasUpstreamBranch(): Promise<boolean> {
+    try {
+        await executeGitCommand('rev-parse --abbrev-ref --symbolic-full-name @{u}');
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Sync - Pull then Push
  */
 export async function sync(): Promise<void> {
+    // A newly created local branch has nothing to pull from yet — `git pull`
+    // fails outright with "no tracking information". Surface a clear,
+    // actionable message rather than the raw git error OR silently pushing —
+    // publishing a branch should always be an explicit user action (the
+    // dedicated Push button), never an implicit side effect of Sync.
+    if (!(await hasUpstreamBranch())) {
+        throw new Error('This branch has not been pushed yet. Use Push to publish it first.');
+    }
     await pull();
     await push();
 }

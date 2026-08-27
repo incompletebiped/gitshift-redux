@@ -373,19 +373,14 @@
           "group": "navigation@2"
         },
         {
-          "command": "gitshift.sync",
+          "command": "gitshift.refreshChanges",
           "when": "view == repositoryWebview",
           "group": "navigation@3"
         },
         {
-          "command": "gitshift.refreshChanges",
-          "when": "view == repositoryWebview",
-          "group": "navigation@4"
-        },
-        {
           "command": "gitshift.moreActions",
           "when": "view == repositoryWebview",
-          "group": "navigation@5"
+          "group": "navigation@4"
         },
         {
           "command": "gitshift.openGitHubProfile",

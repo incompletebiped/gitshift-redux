@@ -276,9 +276,14 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
     // (but not-yet-pushed) state even if push subsequently fails.
     await this.refresh();
     try {
+      await vscode.commands.executeCommand('gitshift._ensureRepoCredentials');
       await push();
       vscode.window.showInformationMessage('Pushed to remote');
       await this.refresh();
+      const branchName = await getCurrentBranch();
+      if (branchName && branchName !== 'unknown') {
+        void vscode.commands.executeCommand('gitshift._offerCreatePullRequest', branchName);
+      }
     } catch (pushError: any) {
       await this._handlePushErrorDialog(pushError, 'Your commit was saved locally, but the push failed. ');
     }
@@ -379,9 +384,14 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
   }
 
   private async _handlePush() {
+    await vscode.commands.executeCommand('gitshift._ensureRepoCredentials');
     await push();
     vscode.window.showInformationMessage('Pushed to remote');
     await this.refresh();
+    const branchName = await getCurrentBranch();
+    if (branchName && branchName !== 'unknown') {
+      void vscode.commands.executeCommand('gitshift._offerCreatePullRequest', branchName);
+    }
     if (this._view) {
       this._view.webview.postMessage({ type: 'clearLoading', buttonId: 'pushBtn' });
     }
@@ -426,6 +436,7 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
   }
 
   private async _handlePull() {
+    await vscode.commands.executeCommand('gitshift._ensureRepoCredentials');
     await pull();
     vscode.window.showInformationMessage('Pulled from remote');
     await this.refresh();
@@ -435,6 +446,7 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
   }
 
   private async _handleFetch() {
+    await vscode.commands.executeCommand('gitshift._ensureRepoCredentials');
     await fetch();
     vscode.window.showInformationMessage('Fetched from remote');
     await this.refresh();
@@ -499,8 +511,27 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       return;
     }
     await createBranch(branchName);
-    vscode.window.showInformationMessage(`Branch '${branchName}' created`);
+    // Switch onto the new branch immediately — otherwise subsequent commits
+    // silently land on the branch the user was already on, and the new
+    // branch never gets anything worth pushing.
+    await checkoutBranch(branchName);
+    vscode.window.showInformationMessage(`Branch '${branchName}' created and checked out`);
     await this.refresh();
+
+    const choice = await vscode.window.showQuickPick(['Yes', 'No'], {
+      placeHolder: `Push branch '${branchName}' to remote now?`
+    });
+    if (choice === 'Yes') {
+      try {
+        await vscode.commands.executeCommand('gitshift._ensureRepoCredentials');
+        await push(branchName);
+        vscode.window.showInformationMessage(`Pushed '${branchName}' to remote`);
+        await this.refresh();
+        void vscode.commands.executeCommand('gitshift._offerCreatePullRequest', branchName);
+      } catch (pushError: any) {
+        await this._handlePushErrorDialog(pushError, `Branch '${branchName}' was created locally, but the push failed. `);
+      }
+    }
   }
 
   private async _handleSwitchBranch(branchName: string) {
