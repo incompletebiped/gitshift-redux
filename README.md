@@ -33,6 +33,17 @@ On a brand-new empty folder you couldn't get started: the extension wouldn't ini
 
 > **Tip:** *Publish to GitHub* is the all-in-one path (init + create-on-GitHub + commit + push) for a new project — use it instead of *Initialize Repository*, which is local-only.
 
+### Recent improvements (v1.1.1 – v1.3.0)
+
+- **Create Pull Request button** — open a PR for the current branch on demand from the Repository panel's Changes tab, without waiting for the post-push prompt. Clearly reports when you're on the default branch or an open PR already exists.
+- **PAT no longer silently overwritten by a stale OAuth session** — a manually-added Personal Access Token is never replaced by a cached VS Code/Cursor OAuth session token, which previously could downgrade a working token and cause pushes touching `.github/workflows/` to fail with no explanation.
+- **Clearer workflow-scope push errors** — the push-failure dialog no longer suggests "Sign In Again" (which would trigger the Cursor OAuth popup this extension is designed to avoid); it now points you to "Update Token" instead.
+- **Unpushed commits are visible** — the Changes tab shows a "_N_ commits not on GitHub" banner instead of reporting a clean tree when commits exist only locally.
+- **Remote branch rows are clickable** and check out a local tracking branch, matching local-branch behavior.
+- **Hardened PATH repair** — `git.path` is honored before falling back to standard Git-for-Windows install locations.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full history.
+
 Everything else behaves like upstream GitShift.
 
 ## Features
@@ -46,6 +57,7 @@ Everything else behaves like upstream GitShift.
 - **Automatic Credential Management**: Configures git credentials automatically when using authenticated accounts
 - **Workspace-Specific Configuration**: Git configuration is set per workspace, keeping your projects organized
 - **Repository Management**: Built-in repository viewer with changes, branches, and commits
+- **Create Pull Request**: Open a PR for the current branch on demand, or accept the post-push prompt
 - **Contributions Graph**: Visualize your GitHub contributions calendar
 - **GitHub Notifications**: View and manage your GitHub notifications
 - **Quick Clone**: Clone repositories and automatically switch to the appropriate account
@@ -241,6 +253,10 @@ This extension provides the following commands (accessible via `Ctrl+Shift+P`). 
 - **`GitShift: Remove Remote...`** - Remove a remote repository
 - **`GitShift: View Remotes`** - View all configured remotes
 
+### Pull Requests
+
+- **`GitShift: Create Pull Request`** - Opens a pull request for the current branch (also available as a **PR** button in the Repository panel's Changes tab)
+
 ### UI & Views
 
 - **`GitShift: Refresh Sidebar`** - Refresh the GitShift sidebar
@@ -264,7 +280,7 @@ This extension provides the following commands (accessible via `Ctrl+Shift+P`). 
 - **Changes Tab**: View staged and unstaged changes
 - **Branches Tab**: See all local and remote branches
 - **Commits Tab**: Browse recent commit history
-- **Quick Actions**: Pull, push, sync, and more Git operations
+- **Quick Actions**: Fetch, pull, push, and open a pull request directly from the action row
 
 ### Contributions View
 
