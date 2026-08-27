@@ -606,9 +606,16 @@ export async function activate(context: vscode.ExtensionContext) {
     await offerCreatePullRequestAfterPush(branchName);
   });
 
-  // User-facing: the dedicated "Create PR" button in the repository panel.
+  // User-facing: the dedicated "PR" button in the repository panel. Opens
+  // the sidebar's Create Pull Request panel once the branch is validated.
   const createPullRequestCommand = vscode.commands.registerCommand('gitshift.createPullRequest', async () => {
-    await handleGitOperation('create pull request', handleCreatePullRequestManually);
+    await handleGitOperation('create pull request', handleOpenPullRequestPanel);
+  });
+
+  // Internal, non-user-facing command: submits the title/description
+  // entered in the sidebar's Create Pull Request panel.
+  const submitPullRequestCommand = vscode.commands.registerCommand('gitshift._submitPullRequest', async (title: string, description: string) => {
+    await handleGitOperation('create pull request', () => handleSubmitPullRequest(title, description));
   });
 
   const pushCommand = vscode.commands.registerCommand('gitshift.push', async () => {
@@ -1466,6 +1473,7 @@ export async function activate(context: vscode.ExtensionContext) {
     ensureRepoCredentialsCommand,
     offerCreatePullRequestCommand,
     createPullRequestCommand,
+    submitPullRequestCommand,
     pullCommand,
     pushCommand,
     syncCommand,
@@ -2549,55 +2557,13 @@ function shouldOfferPullRequest(owner: string, repo: string, branchName: string)
 }
 
 /**
- * Prompts for a PR title and creates the pull request, opening it in the
- * browser on success. Called once the user has explicitly opted in via the
- * post-push notification — never runs unprompted.
+ * Resolves the branch/remote/token/default-branch needed to create a pull
+ * request for the current branch, throwing a user-facing error for any step
+ * that fails (no remote, not authenticated, already on the default branch,
+ * etc). Shared by both the "open the panel" and "submit the panel" steps so
+ * the base branch is always re-fetched fresh at each step, never guessed.
  */
-async function runCreatePullRequestFlow(
-  branchName: string,
-  ctx: { owner: string; repo: string; token: string; defaultBranch: string }
-): Promise<void> {
-  const title = await vscode.window.showInputBox({
-    prompt: 'Pull Request Title',
-    value: branchName,
-    ignoreFocusOut: true
-  });
-  if (!title) {
-    return;
-  }
-
-  try {
-    const pr = await createPullRequest(ctx.token, ctx.owner, ctx.repo, {
-      title,
-      head: branchName,
-      base: ctx.defaultBranch
-    });
-    vscode.window.showInformationMessage(`Pull request #${pr.number} created`);
-    try {
-      await vscode.env.openExternal(vscode.Uri.parse(pr.html_url));
-    } catch (openError: any) {
-      vscode.window.showErrorMessage(`Created the pull request, but couldn't open it: ${openError.message}`);
-    }
-  } catch (error: any) {
-    const message: string = error.message || '';
-    if (/pull request already exists/i.test(message)) {
-      vscode.window.showErrorMessage(`GitShift: A pull request for '${branchName}' already exists.`);
-    } else if (/no commits between/i.test(message)) {
-      vscode.window.showErrorMessage(`GitShift: There are no commits between '${branchName}' and '${ctx.defaultBranch}' to open a pull request for.`);
-    } else {
-      vscode.window.showErrorMessage(`GitShift: Failed to create pull request — ${message}`);
-    }
-  }
-}
-
-/**
- * User-initiated "Create PR" — invoked from the dedicated button in the
- * repository panel. Unlike offerCreatePullRequestAfterPush (a silent,
- * best-effort offer shown right after a push), this always surfaces errors
- * since the user explicitly asked for it, and isn't gated by
- * shouldOfferPullRequest.
- */
-async function handleCreatePullRequestManually(): Promise<void> {
+async function resolvePullRequestTarget(): Promise<{ branchName: string; owner: string; repo: string; token: string; defaultBranch: string }> {
   const { getCurrentBranch } = await import('./gitOperations');
   const branchName = await getCurrentBranch();
   if (!branchName || branchName === 'unknown') {
@@ -2626,10 +2592,25 @@ async function handleCreatePullRequestManually(): Promise<void> {
     throw new Error(`You're on the default branch ('${branchName}'). Switch to a feature branch to open a pull request.`);
   }
 
-  const existingPr = await findOpenPullRequest(token, owner, repo, branchName);
+  return { branchName, owner, repo, token, defaultBranch: repoDetails.default_branch };
+}
+
+/**
+ * User-initiated "Create PR" — invoked from the dedicated button in the
+ * repository panel. Validates that a PR can actually be opened for the
+ * current branch, then reveals the title/description panel in the sidebar
+ * (see RepositoryProvider.showPrPanel) instead of prompting with an input
+ * box. Unlike offerCreatePullRequestAfterPush (a silent, best-effort offer
+ * shown right after a push), this always surfaces errors since the user
+ * explicitly asked for it, and isn't gated by shouldOfferPullRequest.
+ */
+async function handleOpenPullRequestPanel(): Promise<void> {
+  const target = await resolvePullRequestTarget();
+
+  const existingPr = await findOpenPullRequest(target.token, target.owner, target.repo, target.branchName);
   if (existingPr) {
     const choice = await vscode.window.showInformationMessage(
-      `An open pull request already exists for '${branchName}'.`,
+      `An open pull request already exists for '${target.branchName}'.`,
       'View Pull Request'
     );
     if (choice === 'View Pull Request') {
@@ -2638,7 +2619,50 @@ async function handleCreatePullRequestManually(): Promise<void> {
     return;
   }
 
-  await runCreatePullRequestFlow(branchName, { owner, repo, token, defaultBranch: repoDetails.default_branch });
+  if (repositoryProvider) {
+    repositoryProvider.showPrPanel();
+  }
+}
+
+/**
+ * Creates the pull request from the title/description entered in the
+ * sidebar panel, opening it in the browser on success. Invoked once the
+ * user submits the panel shown by handleOpenPullRequestPanel above.
+ */
+async function handleSubmitPullRequest(title: string, description: string): Promise<void> {
+  if (!title || !title.trim()) {
+    vscode.window.showWarningMessage('Pull request title cannot be empty');
+    return;
+  }
+
+  const target = await resolvePullRequestTarget();
+
+  try {
+    const pr = await createPullRequest(target.token, target.owner, target.repo, {
+      title: title.trim(),
+      head: target.branchName,
+      base: target.defaultBranch,
+      body: description || ''
+    });
+    vscode.window.showInformationMessage(`Pull request #${pr.number} created`);
+    try {
+      await vscode.env.openExternal(vscode.Uri.parse(pr.html_url));
+    } catch (openError: any) {
+      vscode.window.showErrorMessage(`Created the pull request, but couldn't open it: ${openError.message}`);
+    }
+    if (repositoryProvider) {
+      repositoryProvider.closePrPanel();
+    }
+  } catch (error: any) {
+    const message: string = error.message || '';
+    if (/pull request already exists/i.test(message)) {
+      vscode.window.showErrorMessage(`GitShift: A pull request for '${target.branchName}' already exists.`);
+    } else if (/no commits between/i.test(message)) {
+      vscode.window.showErrorMessage(`GitShift: There are no commits between '${target.branchName}' and '${target.defaultBranch}' to open a pull request for.`);
+    } else {
+      vscode.window.showErrorMessage(`GitShift: Failed to create pull request — ${message}`);
+    }
+  }
 }
 
 /**
@@ -2692,8 +2716,8 @@ async function offerCreatePullRequestAfterPush(branchName: string): Promise<void
       `Create a pull request for '${branchName}'?`,
       'Create Pull Request'
     );
-    if (choice === 'Create Pull Request') {
-      await runCreatePullRequestFlow(branchName, { owner, repo, token, defaultBranch: repoDetails.default_branch });
+    if (choice === 'Create Pull Request' && repositoryProvider) {
+      repositoryProvider.showPrPanel();
     }
   } catch {
     // Silent — this is a best-effort convenience offer, not a critical path.

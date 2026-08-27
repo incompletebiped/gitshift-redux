@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Create Pull Request button**: a new button in the Changes tab action row lets you open a pull request for the current branch on demand, without waiting for the post-push offer. Reuses the existing PR-creation flow (prompts for a title, creates the PR via the GitHub API, opens it in the browser) and clearly reports when you're on the default branch or an open PR already exists.
+- **Create Pull Request button**: a new **PR** button in the Changes tab action row lets you open a pull request for the current branch on demand, without waiting for the post-push offer. Clicking it validates the branch (not the default branch, no existing open PR), then opens a title/description panel directly in the sidebar — the same treatment as the commit box — instead of a title-only input box at the top of the window. The description field lets you add PR body text the previous single-prompt flow had no room for. The post-push "Create a pull request?" offer opens the same sidebar panel now too.
+- **Auto-filled PR draft**: staging changes (via "Stage All") prefills the PR panel's title and description with a quick summary of the staged files, the same way the commit message box auto-fills — edit or replace before submitting.
 
 ### Changed
 
