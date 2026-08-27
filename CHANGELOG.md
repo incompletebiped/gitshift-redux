@@ -5,6 +5,12 @@ All notable changes to the GitShift extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-08-27
+
+### Fixed
+
+- **Stale remote branches after Fetch**: the Branches tab kept listing remote branches that had already been deleted on GitHub. `git fetch` doesn't remove local remote-tracking refs (`refs/remotes/origin/*`) for branches deleted upstream — that requires `--prune`. Fetch now runs `git fetch --prune`, so deleted remote branches disappear from the Branches tab on the next fetch.
+
 ## [1.4.0] - 2026-08-27
 
 ### Fixed

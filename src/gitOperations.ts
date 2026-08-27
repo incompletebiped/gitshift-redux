@@ -270,7 +270,7 @@ export async function pull(): Promise<void> {
  * Fetch from remote
  */
 export async function fetch(): Promise<void> {
-    await executeGitCommand('fetch');
+    await executeGitCommand('fetch --prune');
 }
 
 /**
