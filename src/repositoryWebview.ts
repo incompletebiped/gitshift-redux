@@ -41,6 +41,7 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
   private _lastRefresh: number = 0;
   private _activeTab: string = 'changes';
   private _commitsLimit: number = 20;
+  private _prPanelOpen: boolean = false;
   private _generationCancelToken?: vscode.CancellationTokenSource;
 
   constructor(private readonly _extensionUri: vscode.Uri) { }
@@ -113,8 +114,14 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
           case 'fetch':
             await this._handleFetch();
             break;
-          case 'createPullRequest':
-            await this._handleCreatePullRequest();
+          case 'openPrPanel':
+            await this._handleOpenPrPanel();
+            break;
+          case 'closePrPanel':
+            this.closePrPanel();
+            break;
+          case 'submitPullRequest':
+            await this._handleSubmitPullRequest(data.title, data.description);
             break;
           case 'discard':
             await this._handleDiscard(data.file);
@@ -458,14 +465,44 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  // Delegates to the extension-level command since PR creation needs the
-  // GitHub API/token logic that already lives in extension.ts — errors and
-  // success messages are surfaced there (see handleGitOperation).
-  private async _handleCreatePullRequest() {
+  // Delegates to the extension-level command since opening the panel needs
+  // the GitHub API/token logic that already lives in extension.ts — it
+  // validates the branch and checks for an existing PR, then calls
+  // showPrPanel() below on success. Errors are surfaced there (see
+  // handleGitOperation).
+  private async _handleOpenPrPanel() {
     await vscode.commands.executeCommand('gitshift.createPullRequest');
     if (this._view) {
       this._view.webview.postMessage({ type: 'clearLoading', buttonId: 'createPrBtn' });
     }
+  }
+
+  // Delegates the actual PR creation to the extension-level command for the
+  // same reason — GitHub API/token logic lives there.
+  private async _handleSubmitPullRequest(title: string, description: string) {
+    await vscode.commands.executeCommand('gitshift._submitPullRequest', title, description);
+    if (this._view) {
+      this._view.webview.postMessage({ type: 'clearLoading', buttonId: 'prCreateBtn' });
+    }
+  }
+
+  /**
+   * Reveals the Create Pull Request panel in the Changes tab. Called from
+   * extension.ts once it has validated that a PR can actually be opened for
+   * the current branch (not the default branch, no existing open PR).
+   */
+  public showPrPanel() {
+    this._prPanelOpen = true;
+    this.refresh();
+  }
+
+  /**
+   * Hides the Create Pull Request panel. Does not force a refresh — the
+   * webview hides it optimistically client-side, and this just keeps the
+   * next server-rendered HTML consistent with that.
+   */
+  public closePrPanel() {
+    this._prPanelOpen = false;
   }
 
   private async _handleDiscard(file: string) {
@@ -754,10 +791,31 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
           <i class="codicon codicon-arrow-up"></i>
           <span>Push</span>
         </button>
-        <button id="createPrBtn" class="action-btn" onclick="createPrWithLoading()" title="Create pull request">
+        <button id="createPrBtn" class="action-btn" onclick="togglePrPanel()" title="Create pull request">
           <i class="codicon codicon-git-pull-request"></i>
           <span>PR</span>
         </button>
+      </div>
+
+      <!-- Pull Request Panel -->
+      <div class="commit-box" id="prBox" style="display: ${this._prPanelOpen ? 'block' : 'none'};">
+        <div class="commit-box-header">
+          <div class="commit-label">
+            <i class="codicon codicon-git-pull-request"></i>
+            <span>Create Pull Request</span>
+          </div>
+          <button class="icon-btn" onclick="closePrPanel()" title="Cancel">
+            <i class="codicon codicon-close"></i>
+          </button>
+        </div>
+        <input id="prTitle" class="pr-title-input" type="text" placeholder="Pull request title" />
+        <textarea id="prDescription" placeholder="Describe the changes in this PR..."></textarea>
+        <div class="commit-actions-row">
+          <button id="prCreateBtn" class="commit-action-btn primary" onclick="submitPullRequestWithLoading()">
+            <i class="codicon codicon-git-pull-request"></i>
+            <span>Create PR</span>
+          </button>
+        </div>
       </div>
 
       <!-- Commit Section -->
@@ -1346,6 +1404,29 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
     }
 
     textarea::placeholder {
+      color: var(--vscode-input-placeholderForeground);
+      opacity: 0.6;
+    }
+
+    .pr-title-input {
+      width: 100%;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 3px;
+      font-family: var(--vscode-font-family);
+      font-size: 12px;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .pr-title-input:focus {
+      border-color: var(--vscode-focusBorder);
+    }
+
+    .pr-title-input::placeholder {
       color: var(--vscode-input-placeholderForeground);
       opacity: 0.6;
     }
@@ -2150,7 +2231,7 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       if (message.type === 'clearLoading' && message.buttonId) {
         clearLoading(message.buttonId);
       } else if (message.type === 'clearAllLoading') {
-        ['pushBtn', 'pullBtn', 'fetchBtn', 'createPrBtn', 'refreshBtn', 'commitBtn', 'commitPushBtn', 'loadMoreBtn', 'addBtn', 'generateMsgBtn'].forEach(id => {
+        ['pushBtn', 'pullBtn', 'fetchBtn', 'createPrBtn', 'prCreateBtn', 'refreshBtn', 'commitBtn', 'commitPushBtn', 'loadMoreBtn', 'addBtn', 'generateMsgBtn'].forEach(id => {
           clearLoading(id);
         });
       } else if (message.type === 'commitMessageGenerated') {
@@ -2428,13 +2509,62 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       fetch();
     }
 
-    function createPr() {
-      vscode.postMessage({ type: 'createPullRequest' });
+    // Builds a quick file-based summary of staged changes, the same way
+    // generateCommitMessage() does for the commit box, for use as a PR
+    // description draft.
+    function generatePrDescriptionDraft() {
+      const stagedItems = Array.from(document.querySelectorAll('.list-item[data-status="staged"]'));
+      const files = stagedItems.map(item => item.getAttribute('data-file')).filter(Boolean);
+      if (files.length === 0) {
+        return '';
+      }
+      return 'Changes:\\n' + files.map(f => '- ' + f).join('\\n');
     }
 
-    function createPrWithLoading() {
-      showLoading('createPrBtn');
-      createPr();
+    // Fills empty PR title/description fields with a fast, local draft.
+    // Mirrors autoFillBasicMessage() for the commit box: no LM call, just a
+    // summary of what's currently staged.
+    function autoFillPrDetails() {
+      const titleInput = document.getElementById('prTitle');
+      const descTextarea = document.getElementById('prDescription');
+      if (titleInput && !titleInput.value.trim()) {
+        titleInput.value = generateCommitMessage();
+      }
+      if (descTextarea && !descTextarea.value.trim()) {
+        descTextarea.value = generatePrDescriptionDraft();
+      }
+    }
+
+    function togglePrPanel() {
+      const box = document.getElementById('prBox');
+      if (box && box.style.display !== 'none') {
+        closePrPanel();
+      } else {
+        showLoading('createPrBtn');
+        vscode.postMessage({ type: 'openPrPanel' });
+      }
+    }
+
+    function closePrPanel() {
+      const box = document.getElementById('prBox');
+      if (box) {
+        box.style.display = 'none';
+      }
+      vscode.postMessage({ type: 'closePrPanel' });
+    }
+
+    function submitPullRequestWithLoading() {
+      const titleInput = document.getElementById('prTitle');
+      const descTextarea = document.getElementById('prDescription');
+      if (!titleInput) return;
+      const title = titleInput.value.trim();
+      if (!title) {
+        titleInput.focus();
+        return;
+      }
+      const description = descTextarea ? descTextarea.value.trim() : '';
+      showLoading('prCreateBtn');
+      vscode.postMessage({ type: 'submitPullRequest', title, description });
     }
 
     function discardFile(file) {
@@ -2507,6 +2637,13 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       
       if (textarea && stagedItems.length > 0 && !textarea.value.trim()) {
         autoFillBasicMessage();
+      }
+
+      // Same idea for the PR panel: if it's open and there are staged
+      // changes, prefill title/description so they're ready by the time the
+      // user opens it (e.g. right after clicking "Stage All").
+      if (document.getElementById('prBox') && stagedItems.length > 0) {
+        autoFillPrDetails();
       }
     });
   </script>

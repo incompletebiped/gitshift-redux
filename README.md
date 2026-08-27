@@ -35,7 +35,7 @@ On a brand-new empty folder you couldn't get started: the extension wouldn't ini
 
 ### Recent improvements (v1.1.1 – v1.3.0)
 
-- **Create Pull Request button** — open a PR for the current branch on demand from the Repository panel's Changes tab, without waiting for the post-push prompt. Clearly reports when you're on the default branch or an open PR already exists.
+- **Create Pull Request button** — open a PR for the current branch on demand from the Repository panel's Changes tab, without waiting for the post-push prompt. Opens an inline title/description panel in the sidebar (same treatment as the commit box) instead of a top-bar input box, so there's room for a PR description — auto-filled from staged changes when you click "Stage All," just like the commit message. Clearly reports when you're on the default branch or an open PR already exists.
 - **PAT no longer silently overwritten by a stale OAuth session** — a manually-added Personal Access Token is never replaced by a cached VS Code/Cursor OAuth session token, which previously could downgrade a working token and cause pushes touching `.github/workflows/` to fail with no explanation.
 - **Clearer workflow-scope push errors** — the push-failure dialog no longer suggests "Sign In Again" (which would trigger the Cursor OAuth popup this extension is designed to avoid); it now points you to "Update Token" instead.
 - **Unpushed commits are visible** — the Changes tab shows a "_N_ commits not on GitHub" banner instead of reporting a clean tree when commits exist only locally.
