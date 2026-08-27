@@ -756,7 +756,7 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
         </button>
         <button id="createPrBtn" class="action-btn" onclick="createPrWithLoading()" title="Create pull request">
           <i class="codicon codicon-git-pull-request"></i>
-          <span>Create PR</span>
+          <span>PR</span>
         </button>
       </div>
 
