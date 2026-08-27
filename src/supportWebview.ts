@@ -146,7 +146,7 @@ export class SupportProvider implements vscode.WebviewViewProvider {
   <div class="donation-section">
     <h4>Support GitShift</h4>
     <p>If you find this extension helpful, consider supporting its development!</p>
-    <a href="https://www.buymeacoffee.com/mikeeeyy" target="_blank" class="donation-link" onclick="openDonation(event)">
+    <a href="https://buymeacoffee.com/incompletebiped" target="_blank" class="donation-link" onclick="openDonation(event)">
       <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" />
     </a>
   </div>
@@ -158,7 +158,7 @@ export class SupportProvider implements vscode.WebviewViewProvider {
       event.preventDefault();
       vscode.postMessage({ 
         type: 'openExternal', 
-        url: 'https://www.buymeacoffee.com/mikeeeyy' 
+        url: 'https://buymeacoffee.com/incompletebiped'
       });
     }
   </script>

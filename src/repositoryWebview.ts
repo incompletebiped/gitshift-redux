@@ -497,12 +497,15 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Hides the Create Pull Request panel. Does not force a refresh — the
-   * webview hides it optimistically client-side, and this just keeps the
-   * next server-rendered HTML consistent with that.
+   * Hides the Create Pull Request panel and refreshes the webview. Needed
+   * because the client only hides the panel optimistically when the user
+   * clicks Cancel — after a successful submit there is no client-side hide,
+   * so without this refresh the panel (with stale title/description) would
+   * stay visible until some unrelated event re-rendered the view.
    */
   public closePrPanel() {
     this._prPanelOpen = false;
+    this.refresh();
   }
 
   private async _handleDiscard(file: string) {

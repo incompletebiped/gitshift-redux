@@ -424,6 +424,12 @@ Found a bug or have a feature request **for this fork**? Please <a href="https:/
 
 GitShift Redux is a fork of <a href="https://github.com/mikeeeyy04/GitShift" target="_blank" rel="noopener noreferrer"><strong>GitShift</strong></a>, originally created by <a href="https://github.com/mikeeeyy04" target="_blank" rel="noopener noreferrer"><strong>mikeeeyy04</strong></a> to solve the common problem of managing multiple GitHub identities. This fork adapts that work for **Cursor AI** and refines the new-repository / publish flow. Full credit for the original extension goes to the upstream author — please visit <a href="https://github.com/mikeeeyy04/GitShift" target="_blank" rel="noopener noreferrer">the upstream repo</a> to support their work.
 
+## Support This Fork
+
+If GitShift Redux has been useful to you, consider supporting the fork's development:
+
+<a href="https://buymeacoffee.com/incompletebiped" target="_blank" rel="noopener noreferrer"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="41" width="174" /></a>
+
 ---
 
 <div align="center">
