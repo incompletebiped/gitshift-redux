@@ -606,6 +606,11 @@ export async function activate(context: vscode.ExtensionContext) {
     await offerCreatePullRequestAfterPush(branchName);
   });
 
+  // User-facing: the dedicated "Create PR" button in the repository panel.
+  const createPullRequestCommand = vscode.commands.registerCommand('gitshift.createPullRequest', async () => {
+    await handleGitOperation('create pull request', handleCreatePullRequestManually);
+  });
+
   const pushCommand = vscode.commands.registerCommand('gitshift.push', async () => {
     await handleGitOperation('push', async () => {
       await ensureRepoCredentialsForActiveIdentity();
@@ -1460,6 +1465,7 @@ export async function activate(context: vscode.ExtensionContext) {
     removeTokenCommand,
     ensureRepoCredentialsCommand,
     offerCreatePullRequestCommand,
+    createPullRequestCommand,
     pullCommand,
     pushCommand,
     syncCommand,
@@ -2582,6 +2588,57 @@ async function runCreatePullRequestFlow(
       vscode.window.showErrorMessage(`GitShift: Failed to create pull request — ${message}`);
     }
   }
+}
+
+/**
+ * User-initiated "Create PR" — invoked from the dedicated button in the
+ * repository panel. Unlike offerCreatePullRequestAfterPush (a silent,
+ * best-effort offer shown right after a push), this always surfaces errors
+ * since the user explicitly asked for it, and isn't gated by
+ * shouldOfferPullRequest.
+ */
+async function handleCreatePullRequestManually(): Promise<void> {
+  const { getCurrentBranch } = await import('./gitOperations');
+  const branchName = await getCurrentBranch();
+  if (!branchName || branchName === 'unknown') {
+    throw new Error('Could not determine the current branch.');
+  }
+
+  const remoteUrl = await getRemoteUrl('origin');
+  if (!remoteUrl || !remoteUrl.includes('github.com')) {
+    throw new Error('No GitHub remote found for this repository.');
+  }
+  const repoInfo = parseGitHubUrl(remoteUrl);
+  if (!repoInfo) {
+    throw new Error('Could not parse the GitHub remote URL.');
+  }
+  const { owner, repo } = repoInfo;
+
+  const resolved = await resolveActiveAccountToken();
+  if (!resolved) {
+    throw new Error('No authenticated GitHub account found. Sign in first.');
+  }
+  const { token } = resolved;
+
+  const repoDetails = await getGitHubRepository(token, owner, repo);
+  defaultBranchCache.set(`${owner}/${repo}`, repoDetails.default_branch);
+  if (repoDetails.default_branch === branchName) {
+    throw new Error(`You're on the default branch ('${branchName}'). Switch to a feature branch to open a pull request.`);
+  }
+
+  const existingPr = await findOpenPullRequest(token, owner, repo, branchName);
+  if (existingPr) {
+    const choice = await vscode.window.showInformationMessage(
+      `An open pull request already exists for '${branchName}'.`,
+      'View Pull Request'
+    );
+    if (choice === 'View Pull Request') {
+      await vscode.env.openExternal(vscode.Uri.parse(existingPr.html_url));
+    }
+    return;
+  }
+
+  await runCreatePullRequestFlow(branchName, { owner, repo, token, defaultBranch: repoDetails.default_branch });
 }
 
 /**

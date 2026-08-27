@@ -5,6 +5,18 @@ All notable changes to the GitShift extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-08-27
+
+### Added
+
+- **Create Pull Request button**: a new button in the Changes tab action row lets you open a pull request for the current branch on demand, without waiting for the post-push offer. Reuses the existing PR-creation flow (prompts for a title, creates the PR via the GitHub API, opens it in the browser) and clearly reports when you're on the default branch or an open PR already exists.
+
+### Changed
+
+- **Action row reordered and decluttered**: buttons are now ordered Fetch, Pull, Push, Create PR. The in-panel Refresh button was removed — refreshing is already available from the panel's title bar icon.
+
+---
+
 ## [1.2.0] - 2026-07-09
 
 ### Fixed

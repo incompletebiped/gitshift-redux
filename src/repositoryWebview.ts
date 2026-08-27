@@ -113,6 +113,9 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
           case 'fetch':
             await this._handleFetch();
             break;
+          case 'createPullRequest':
+            await this._handleCreatePullRequest();
+            break;
           case 'discard':
             await this._handleDiscard(data.file);
             break;
@@ -455,6 +458,16 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  // Delegates to the extension-level command since PR creation needs the
+  // GitHub API/token logic that already lives in extension.ts — errors and
+  // success messages are surfaced there (see handleGitOperation).
+  private async _handleCreatePullRequest() {
+    await vscode.commands.executeCommand('gitshift.createPullRequest');
+    if (this._view) {
+      this._view.webview.postMessage({ type: 'clearLoading', buttonId: 'createPrBtn' });
+    }
+  }
+
   private async _handleDiscard(file: string) {
     const confirm = await vscode.window.showWarningMessage(
       `Discard changes in '${file}'?`,
@@ -729,6 +742,10 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
 
       <!-- Action Buttons -->
       <div class="actions-row">
+        <button id="fetchBtn" class="action-btn" onclick="fetchWithLoading()" title="Fetch from remote">
+          <i class="codicon codicon-sync"></i>
+          <span>Fetch</span>
+        </button>
         <button id="pullBtn" class="action-btn" onclick="pullWithLoading()" title="Pull changes">
           <i class="codicon codicon-arrow-down"></i>
           <span>Pull</span>
@@ -737,13 +754,9 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
           <i class="codicon codicon-arrow-up"></i>
           <span>Push</span>
         </button>
-        <button id="fetchBtn" class="action-btn" onclick="fetchWithLoading()" title="Fetch from remote">
-          <i class="codicon codicon-sync"></i>
-          <span>Fetch</span>
-        </button>
-        <button id="refreshBtn" class="action-btn" onclick="refreshWithLoading()" title="Refresh status">
-          <i class="codicon codicon-refresh"></i>
-          <span>Refresh</span>
+        <button id="createPrBtn" class="action-btn" onclick="createPrWithLoading()" title="Create pull request">
+          <i class="codicon codicon-git-pull-request"></i>
+          <span>Create PR</span>
         </button>
       </div>
 
@@ -2137,7 +2150,7 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       if (message.type === 'clearLoading' && message.buttonId) {
         clearLoading(message.buttonId);
       } else if (message.type === 'clearAllLoading') {
-        ['pushBtn', 'pullBtn', 'fetchBtn', 'refreshBtn', 'commitBtn', 'commitPushBtn', 'loadMoreBtn', 'addBtn', 'generateMsgBtn'].forEach(id => {
+        ['pushBtn', 'pullBtn', 'fetchBtn', 'createPrBtn', 'refreshBtn', 'commitBtn', 'commitPushBtn', 'loadMoreBtn', 'addBtn', 'generateMsgBtn'].forEach(id => {
           clearLoading(id);
         });
       } else if (message.type === 'commitMessageGenerated') {
@@ -2413,6 +2426,15 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
     function fetchWithLoading() {
       showLoading('fetchBtn');
       fetch();
+    }
+
+    function createPr() {
+      vscode.postMessage({ type: 'createPullRequest' });
+    }
+
+    function createPrWithLoading() {
+      showLoading('createPrBtn');
+      createPr();
     }
 
     function discardFile(file) {
