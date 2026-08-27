@@ -5,6 +5,23 @@ All notable changes to the GitShift extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-08-27
+
+### Fixed
+
+- **Stale remote branches after Fetch**: the Branches tab kept listing remote branches that had already been deleted on GitHub. `git fetch` doesn't remove local remote-tracking refs (`refs/remotes/origin/*`) for branches deleted upstream — that requires `--prune`. Fetch now runs `git fetch --prune`, so deleted remote branches disappear from the Branches tab on the next fetch.
+
+## [1.4.0] - 2026-08-27
+
+### Fixed
+
+- **Create Pull Request panel getting stuck open**: after successfully submitting a pull request from the sidebar panel, the panel stayed visible with the stale title/description instead of closing — the extension only flipped an internal flag without refreshing the webview, and the client only hid the panel optimistically on Cancel, never on a successful submit. The panel now closes immediately once the PR is created.
+
+### Changed
+
+- **Support link now points to this fork**: the sidebar's "Support GitShift" Buy Me a Coffee link now points to `buymeacoffee.com/incompletebiped` (this fork's maintainer) instead of the upstream author's link.
+- **README**: added a "Support This Fork" section crediting the fork's development separately from the existing upstream `mikeeeyy04` credit/support links, which remain unchanged.
+
 ## [1.3.0] - 2026-08-27
 
 ### Added
