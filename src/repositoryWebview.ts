@@ -600,9 +600,26 @@ export class RepositoryProvider implements vscode.WebviewViewProvider {
       'Delete'
     );
     if (confirm === 'Delete') {
-      await deleteBranch(branchName);
-      vscode.window.showInformationMessage(`Branch '${branchName}' deleted`);
-      await this.refresh();
+      try {
+        await deleteBranch(branchName);
+        vscode.window.showInformationMessage(`Branch '${branchName}' deleted`);
+        await this.refresh();
+      } catch (error: any) {
+        if (/not fully merged/i.test(error.message)) {
+          const forceChoice = await vscode.window.showWarningMessage(
+            `GitShift: '${branchName}' isn't recognized as merged locally. This is expected after a squash or rebase merge on GitHub — the branch's commits get new SHAs on the target branch, so git can't see it as merged even though its content is. If you've confirmed it was merged and deleted on GitHub, it's safe to force delete.`,
+            { modal: true },
+            'Force Delete'
+          );
+          if (forceChoice === 'Force Delete') {
+            await deleteBranch(branchName, true);
+            vscode.window.showInformationMessage(`Branch '${branchName}' deleted`);
+            await this.refresh();
+          }
+        } else {
+          throw error;
+        }
+      }
     }
   }
 
