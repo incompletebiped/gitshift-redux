@@ -337,9 +337,15 @@ export async function checkRepoAccess(accessToken: string, owner: string, repo: 
 /**
  * Creates a new GitHub repository
  */
-export async function createGitHubRepository(accessToken: string, name: string, description: string = '', privateRepo: boolean = false): Promise<{ html_url: string; clone_url: string; name: string; owner: { login: string } }> {
+export async function createGitHubRepository(accessToken: string, name: string, description: string = '', privateRepo: boolean = false, org?: string): Promise<{ html_url: string; clone_url: string; name: string; owner: { login: string } }> {
     try {
-        const response = await fetch('https://api.github.com/user/repos', {
+        // Creating under an organization uses a different endpoint than creating
+        // under the authenticated user's personal account.
+        const url = org
+            ? `https://api.github.com/orgs/${encodeURIComponent(org)}/repos`
+            : 'https://api.github.com/user/repos';
+
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
@@ -364,6 +370,38 @@ export async function createGitHubRepository(accessToken: string, name: string, 
         return data;
     } catch (error: any) {
         throw new Error(`Failed to create GitHub repository: ${error.message}`);
+    }
+}
+
+export interface GitHubOrg {
+    login: string;
+    avatar_url?: string;
+}
+
+/**
+ * Lists the organizations the token's user is a member of, so publishToGitHub
+ * can offer them as a repository owner alongside the personal account.
+ * Returns an empty list on any failure — this is an optional enhancement,
+ * never something that should block publishing under the personal account.
+ */
+export async function getGitHubOrgs(accessToken: string): Promise<GitHubOrg[]> {
+    try {
+        const response = await fetch('https://api.github.com/user/orgs', {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'VSCode-GitShift'
+            }
+        });
+
+        if (!response.ok) {
+            return [];
+        }
+
+        const data = await response.json() as GitHubOrg[];
+        return data;
+    } catch (error) {
+        return [];
     }
 }
 

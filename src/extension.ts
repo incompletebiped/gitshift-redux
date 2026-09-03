@@ -18,7 +18,7 @@ import { RepositoryProvider } from './repositoryWebview';
 import { ContributionsProvider } from './contributionsWebview';
 import { SupportProvider } from './supportWebview';
 import { GitHubAccount } from './types';
-import { signInToGitHub, getGitHubUser, getGitHubEmails, getGitHubSessions, getGitHubSessionByAccountId, initAuthSecrets, validateGitHubToken, storeGitHubToken, deleteGitHubToken, getGitHubToken, checkRepoAccess, checkCollaboratorAccess, getAllStoredTokens, createGitHubRepository, getGitHubRepository, findOpenPullRequest, createPullRequest } from './githubAuth';
+import { signInToGitHub, getGitHubUser, getGitHubEmails, getGitHubSessions, getGitHubSessionByAccountId, initAuthSecrets, validateGitHubToken, storeGitHubToken, deleteGitHubToken, getGitHubToken, checkRepoAccess, checkCollaboratorAccess, getAllStoredTokens, createGitHubRepository, getGitHubRepository, findOpenPullRequest, createPullRequest, getGitHubOrgs } from './githubAuth';
 import { quickCloneRepository } from './repoQuickClone';
 import { configureGitCredentials, updateRemoteUrlWithToken, getRemoteUrl, parseGitHubUrl, migrateEmbeddedCredentials } from './gitCredentials';
 import { classifyPushError, getFriendlyPushErrorMessage } from './gitErrorMessages';
@@ -1336,6 +1336,32 @@ export async function activate(context: vscode.ExtensionContext) {
         gitshiftOutputChannel?.appendLine(`[publishToGitHub] Final GitHub username: ${githubUsername}`);
       }
 
+      // Ask which owner (personal account or an organization) the repo should
+      // be created under. Only prompt if the token's user actually belongs to
+      // any organizations — otherwise there's nothing to choose between.
+      let selectedOrg: string | undefined;
+      try {
+        const orgs = await getGitHubOrgs(token);
+        if (orgs.length > 0) {
+          const ownerPicks = [
+            { label: `$(account) ${username}`, detail: 'Your personal account', owner: undefined as string | undefined },
+            ...orgs.map(o => ({ label: `$(organization) ${o.login}`, detail: 'Organization', owner: o.login }))
+          ];
+          const ownerPick = await vscode.window.showQuickPick(ownerPicks, {
+            placeHolder: `Publish ${repoName} under...`
+          });
+          if (!ownerPick) {
+            gitshiftOutputChannel?.appendLine('[publishToGitHub] User cancelled owner selection');
+            return;
+          }
+          selectedOrg = ownerPick.owner;
+          gitshiftOutputChannel?.appendLine(`[publishToGitHub] Selected owner: ${selectedOrg || username} (personal: ${!selectedOrg})`);
+        }
+      } catch (e) {
+        // Org lookup is a best-effort enhancement; fall back to personal account.
+        gitshiftOutputChannel?.appendLine(`[publishToGitHub] Org lookup failed, defaulting to personal account: ${e}`);
+      }
+
       // Initialize repository if not already initialized (silently, no prompt)
       const isGitRepo = await isGitRepository();
       gitshiftOutputChannel?.appendLine(`[publishToGitHub] Is Git repository: ${isGitRepo}`);
@@ -1349,7 +1375,7 @@ export async function activate(context: vscode.ExtensionContext) {
       // Create repository on GitHub
       gitshiftOutputChannel?.appendLine('[publishToGitHub] Creating repository on GitHub...');
       vscode.window.showInformationMessage('Creating repository on GitHub...');
-      const repo = await createGitHubRepository(token, repoName, description || '', visibility.isPrivate);
+      const repo = await createGitHubRepository(token, repoName, description || '', visibility.isPrivate, selectedOrg);
       gitshiftOutputChannel?.appendLine(`[publishToGitHub] Repository created: ${repo.html_url}`);
 
       // Store credentials before adding any remote — this prevents Cursor's
