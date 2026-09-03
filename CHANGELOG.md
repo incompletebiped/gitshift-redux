@@ -5,6 +5,12 @@ All notable changes to the GitShift extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-09-03
+
+### Added
+
+- **Publish to an organization**: "Publish to GitHub" now asks which owner the new repository should be created under when the authenticated account belongs to one or more GitHub organizations — your personal account or any of those orgs — the same way it already asks for visibility and which account to publish with. Previously the repo was always created under the personal account (`POST /user/repos`), even when the intent was to publish under an org.
+
 ## [1.4.1] - 2026-08-27
 
 ### Fixed
